@@ -1,10 +1,1 @@
-import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-
-@Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
+import { Module } from '@nestjs/common'; import { ConfigModule } from '@nestjs/config'; import { BullModule } from '@nestjs/bullmq'; import { JwtModule } from '@nestjs/jwt'; import { PrismaModule } from './prisma/prisma.module'; import { AuthModule } from './auth/auth.module'; import { ContactsModule } from './contacts/contacts.module'; import { TagsModule } from './tags/tags.module'; import { WhatsAppModule } from './whatsapp/whatsapp.module'; import { CampaignsModule } from './campaigns/campaigns.module'; import { ReportsModule } from './reports/reports.module'; @Module({ imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, JwtModule.register({ global: true, secret: process.env.JWT_SECRET || 'dev-secret' }), BullModule.forRoot({ connection: { url: process.env.REDIS_URL || 'redis://localhost:6379' } }), AuthModule, ContactsModule, TagsModule, WhatsAppModule, CampaignsModule, ReportsModule] }) export class AppModule { }
