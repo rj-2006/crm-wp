@@ -1,0 +1,457 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+// All models use PascalCase in Prisma; @@map() maps to the existing snake_case
+// PostgreSQL tables. All snake_case columns are mapped via @map() so the
+// generated client exposes camelCase field names throughout.
+
+model ActivityLog {
+  id        String   @id @default(uuid()) @db.Uuid @map("log_id")
+  contactId String   @db.Uuid @map("contact_id")
+  userId    String?  @db.Uuid @map("user_id")
+  /// Stored in DB as `action` column; exposed as `type` in code
+  type      String   @map("action")
+  metadata  Json?
+  companyId String?  @db.Uuid @map("company_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId])
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid @map("audit_log_id")
+  companyId  String?  @db.Uuid @map("company_id")
+  userId     String?  @db.Uuid @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String?  @db.Uuid @map("entity_id")
+  action     String
+  changes    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId])
+  @@index([createdAt])
+  @@index([entityType, entityId], map: "audit_logs_entity_idx")
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model CampaignRecipient {
+  id                 String                     @id @default(uuid()) @db.Uuid @map("recipient_id")
+  campaignId         String                     @db.Uuid @map("campaign_id")
+  contactId          String                     @db.Uuid @map("contact_id")
+  status             CrmCampaignRecipientStatus @default(PENDING)
+  attempts           Int                        @default(0)
+  nextRetryAt        DateTime?                  @db.Timestamptz(6) @map("next_retry_at")
+  lastError          String?                    @map("last_error")
+  sentAt             DateTime?                  @db.Timestamptz(6) @map("sent_at")
+  deliveredAt        DateTime?                  @db.Timestamptz(6) @map("delivered_at")
+  readAt             DateTime?                  @db.Timestamptz(6) @map("read_at")
+  failedAt           DateTime?                  @db.Timestamptz(6) @map("failed_at")
+  lastStatusChangeAt DateTime                   @default(now()) @db.Timestamptz(6) @map("last_status_change_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([campaignId, contactId], map: "campaign_recipients_campaign_contact_key")
+  @@index([campaignId])
+  @@index([contactId])
+  @@index([nextRetryAt])
+  @@index([status])
+  @@map("campaign_recipients")
+}
+
+model Campaign {
+  id                String            @id @default(uuid()) @db.Uuid @map("campaign_id")
+  name              String
+  templateId        String?           @db.Uuid @map("template_id")
+  status            CrmCampaignStatus @default(DRAFT)
+  segmentFilter     Json?             @map("segment_filter")
+  companyId         String?           @db.Uuid @map("company_id")
+  createdBy         String?           @db.Uuid @map("created_by")
+  whatsappAccountId String?           @db.Uuid @map("whatsapp_account_id")
+  totalRecipients   Int               @default(0) @map("total_recipients")
+  sentCount         Int               @default(0) @map("sent_count")
+  deliveredCount    Int               @default(0) @map("delivered_count")
+  readCount         Int               @default(0) @map("read_count")
+  failedCount       Int               @default(0) @map("failed_count")
+
+  recipients      CampaignRecipient[]
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator         User?               @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  template        MessageTemplate?    @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappAccount WhatsAppAccount?    @relation(fields: [whatsappAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messages        Message[]
+
+  @@index([companyId])
+  @@index([createdBy])
+  @@index([status])
+  @@index([whatsappAccountId])
+  @@map("campaigns")
+}
+
+model Company {
+  id       String  @id @default(uuid()) @db.Uuid @map("company_id")
+  name     String
+  industry String?
+
+  activityLogs     ActivityLog[]
+  auditLogs        AuditLog[]
+  campaigns        Campaign[]
+  consentLogs      ConsentLog[]
+  contacts         Contact[]
+  followUps        FollowUp[]
+  leads            Lead[]
+  messageTemplates MessageTemplate[]
+  tags             Tag[]
+  users            User[]
+  whatsappAccounts WhatsAppAccount[]
+
+  @@map("companies")
+}
+
+model ConsentLog {
+  id        String   @id @default(uuid()) @db.Uuid @map("consent_log_id")
+  companyId String?  @db.Uuid @map("company_id")
+  contactId String   @db.Uuid @map("contact_id")
+  /// Stored in DB as `action` column; exposed as `type` in code (values: OPT_IN, OPT_OUT)
+  type      String   @map("action")
+  source    String?
+  reason    String?
+  /// Stored in DB as `created_at`; exposed as `capturedAt` to match service code
+  capturedAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([capturedAt])
+  @@map("consent_logs")
+}
+
+model ContactTag {
+  contactId String @db.Uuid @map("contact_id")
+  tagId     String @db.Uuid @map("tag_id")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([contactId, tagId])
+  @@map("contact_tags")
+}
+
+model Contact {
+  id               String           @id @default(uuid()) @db.Uuid @map("contact_id")
+  /// Legacy single-name field; nullable now that firstName/lastName exist
+  name             String?
+  firstName        String?          @map("first_name")
+  lastName         String?          @map("last_name")
+  phone            String
+  email            String?
+  companyId        String           @db.Uuid @map("company_id")
+  consentStatus    CrmConsentStatus @default(UNKNOWN) @map("consent_status")
+  /// Lifecycle status (e.g. lead, customer) — separate from consent
+  status           String?
+  source           String?
+  customFields     Json?            @map("custom_fields")
+  lastInboundAt    DateTime?        @db.Timestamptz(6) @map("last_inbound_at")
+  consentSource    String?          @map("consent_source")
+  consentUpdatedAt DateTime?        @db.Timestamptz(6) @map("consent_updated_at")
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  activityLogs       ActivityLog[]
+  campaignRecipients CampaignRecipient[]
+  consentLogs        ConsentLog[]
+  tags               ContactTag[]
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  followUps          FollowUp[]
+  leads              Lead[]
+  messages           Message[]
+
+  @@unique([companyId, phone], map: "contacts_company_phone_key")
+  @@index([companyId, consentStatus], map: "contacts_company_consent_status_idx")
+  @@index([companyId])
+  @@map("contacts")
+}
+
+model FollowUp {
+  id         String    @id @default(uuid()) @db.Uuid @map("follow_up_id")
+  contactId  String    @db.Uuid @map("contact_id")
+  assignedTo String?   @db.Uuid @map("assigned_to")
+  dueDate    DateTime? @db.Date @map("due_date")
+  notes      String?
+  companyId  String?   @db.Uuid @map("company_id")
+
+  assignee User?    @relation(fields: [assignedTo], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  company  Company? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([assignedTo])
+  @@index([companyId])
+  @@index([contactId])
+  @@map("follow_ups")
+}
+
+model Lead {
+  id        String   @id @default(uuid()) @db.Uuid @map("lead_id")
+  contactId String   @db.Uuid @map("contact_id")
+  stage     String?
+  source    String?
+  companyId String?  @db.Uuid @map("company_id")
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact Contact  @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId])
+  @@index([contactId])
+  @@map("leads")
+}
+
+model Message {
+  id                String              @id @default(uuid()) @db.Uuid @map("message_id")
+  contactId         String              @db.Uuid @map("contact_id")
+  companyId         String?             @db.Uuid @map("company_id")
+  campaignId        String?             @db.Uuid @map("campaign_id")
+  templateId        String?             @db.Uuid @map("template_id")
+  providerMessageId String?             @unique @map("provider_message_id")
+  status            CrmMessageStatus    @default(PENDING)
+  whatsappAccountId String?             @db.Uuid @map("whatsapp_account_id")
+  direction         CrmMessageDirection @default(OUTBOUND)
+  fromNumber        String?             @map("from_number")
+  toNumber          String?             @map("to_number")
+  messageType       String?             @map("message_type")
+  body              String?
+  payload           Json?
+  errorCode         String?             @map("error_code")
+  errorMessage      String?             @map("error_message")
+  failedAt          DateTime?           @db.Timestamptz(6) @map("failed_at")
+  sentAt            DateTime?           @db.Timestamptz(6) @map("sent_at")
+  deliveredAt       DateTime?           @db.Timestamptz(6) @map("delivered_at")
+  readAt            DateTime?           @db.Timestamptz(6) @map("read_at")
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contact         Contact          @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  template        MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappAccount WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  webhookEvents   WebhookEvent[]
+
+  @@index([campaignId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([status])
+  @@index([templateId])
+  @@index([whatsappAccountId])
+  @@map("messages")
+}
+
+model MessageTemplate {
+  id                 String                    @id @default(uuid()) @db.Uuid @map("template_id")
+  name               String
+  providerTemplateId String?                   @map("provider_template_id")
+  category           CrmTemplateCategory?
+  approvalStatus     CrmTemplateApprovalStatus @default(PENDING) @map("approval_status")
+  companyId          String?                   @db.Uuid @map("company_id")
+  language           String?
+  structurePayload   Json?                     @map("structure_payload")
+  syncedAt           DateTime?                 @db.Timestamptz(6) @map("synced_at")
+
+  campaigns Campaign[]
+  company   Company?   @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messages  Message[]
+
+  @@index([companyId])
+  @@map("message_templates")
+}
+
+/// Stores hashed refresh tokens for JWT refresh flow
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid @map("refresh_token_id")
+  userId    String   @db.Uuid @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @db.Timestamptz(6) @map("expires_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Tag {
+  id        String  @id @default(uuid()) @db.Uuid @map("tag_id")
+  name      String
+  color     String?
+  companyId String? @db.Uuid @map("company_id")
+
+  contacts ContactTag[]
+  company  Company?     @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([companyId, name], map: "tags_company_name_key")
+  @@index([companyId])
+  @@map("tags")
+}
+
+model User {
+  id           String      @id @default(uuid()) @db.Uuid @map("user_id")
+  name         String
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  role         CrmUserRole @default(STAFF)
+  companyId    String?     @db.Uuid @map("company_id")
+
+  activityLogs     ActivityLog[]
+  auditLogs        AuditLog[]
+  campaigns        Campaign[]
+  followUps        FollowUp[]
+  refreshTokens    RefreshToken[]
+  company          Company?         @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappAccounts WhatsAppAccount[]
+
+  @@index([companyId])
+  @@map("users")
+}
+
+model WebhookEvent {
+  id                String   @id @default(uuid()) @db.Uuid @map("event_id")
+  /// Made nullable — webhook handler auto-generates deduplication where needed
+  dedupeKey         String?  @unique @map("dedupe_key")
+  messageId         String?  @db.Uuid @map("message_id")
+  companyId         String?  @db.Uuid @map("company_id")
+  whatsappAccountId String?  @db.Uuid @map("whatsapp_account_id")
+  /// Stored in DB as `type`; exposed as `eventType` to avoid TS keyword collision
+  eventType         String   @map("type")
+  /// Stored in DB as `raw_payload`; exposed as `payload`
+  payload           Json?    @map("raw_payload")
+  processed         Boolean  @default(false)
+  receivedAt        DateTime @default(now()) @db.Timestamptz(6) @map("received_at")
+
+  message         Message?         @relation(fields: [messageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  whatsappAccount WhatsAppAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([messageId])
+  @@index([whatsappAccountId])
+  @@map("webhook_events")
+}
+
+model WhatsAppAccount {
+  id                String  @id @default(uuid()) @db.Uuid @map("account_id")
+  phoneNumberId     String  @unique @map("phone_number_id")
+  businessAccountId String? @map("business_account_id")
+  credentialsRef    String? @map("credentials_ref")
+  /// Raw access token — TODO (M6): move to secrets manager; use credentialsRef instead
+  accessToken       String? @map("access_token")
+  companyId         String? @db.Uuid @map("company_id")
+  ownerUserId       String? @db.Uuid @map("owner_user_id")
+  name              String?
+  /// Stored in DB as `is_active`; exposed as `active` to match service code
+  active            Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  campaigns     Campaign[]
+  messages      Message[]
+  webhookEvents WebhookEvent[]
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  owner         User?          @relation(fields: [ownerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([companyId])
+  @@index([ownerUserId])
+  @@map("whatsapp_accounts")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+// Prisma enum values are UPPERCASE; @map() translates to the existing lowercase
+// DB enum values. No DB migration needed for existing enums — only the two new
+// values (queued, failed) on crm_message_status require an ALTER TYPE.
+
+enum CrmCampaignRecipientStatus {
+  PENDING   @map("pending")
+  QUEUED    @map("queued")
+  SENT      @map("sent")
+  DELIVERED @map("delivered")
+  READ      @map("read")
+  FAILED    @map("failed")
+
+  @@map("crm_campaign_recipient_status")
+}
+
+enum CrmCampaignStatus {
+  DRAFT     @map("draft")
+  SCHEDULED @map("scheduled")
+  RUNNING   @map("running")
+  COMPLETED @map("completed")
+  CANCELLED @map("cancelled")
+
+  @@map("crm_campaign_status")
+}
+
+enum CrmConsentStatus {
+  UNKNOWN   @map("unknown")
+  OPTED_IN  @map("opted_in")
+  OPTED_OUT @map("opted_out")
+
+  @@map("crm_consent_status")
+}
+
+enum CrmMessageDirection {
+  INBOUND  @map("inbound")
+  OUTBOUND @map("outbound")
+
+  @@map("crm_message_direction")
+}
+
+enum CrmMessageStatus {
+  PENDING          @map("pending")
+  /// Initial queue state before worker picks up
+  QUEUED           @map("queued")
+  SENT             @map("sent")
+  DELIVERED        @map("delivered")
+  READ             @map("read")
+  /// Generic failure (e.g. from webhook status callback)
+  FAILED           @map("failed")
+  /// Transient failure — eligible for retry via BullMQ
+  FAILED_RETRYABLE @map("failed_retryable")
+  /// Permanent failure — no further retry
+  FAILED_PERMANENT @map("failed_permanent")
+
+  @@map("crm_message_status")
+}
+
+enum CrmTemplateApprovalStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+
+  @@map("crm_template_approval_status")
+}
+
+enum CrmTemplateCategory {
+  MARKETING      @map("marketing")
+  UTILITY        @map("utility")
+  AUTHENTICATION @map("authentication")
+
+  @@map("crm_template_category")
+}
+
+enum CrmUserRole {
+  STAFF @map("staff")
+  ADMIN @map("admin")
+
+  @@map("crm_user_role")
+}
