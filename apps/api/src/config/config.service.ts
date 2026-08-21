@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 interface UpdateWhatsAppConfigInput {
   phoneNumberId?: string;
   businessAccountId?: string;
-  credentialsRef?: string; // reference into the secrets manager — never a raw secret
+  credentialsRef?: string;
   isActive?: boolean;
 }
 
