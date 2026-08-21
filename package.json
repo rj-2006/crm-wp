@@ -1,0 +1,7 @@
+{
+  "name":"whatsapp-crm-platform",
+  "private":true,
+  "scripts":{"dev":"pnpm --parallel --filter api --filter web dev","build":"pnpm -r build","db:generate":"pnpm --filter api prisma:generate","db:push":"pnpm --filter api prisma:push","db:seed":"pnpm --filter api prisma:seed"},
+  "packageManager":"pnpm@10.14.0",
+  "devDependencies":{"typescript":"^5.9.2"}
+}
