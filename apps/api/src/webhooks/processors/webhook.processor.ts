@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { MessageDirection, MessageStatus, Prisma } from '@prisma/client';
+import { CrmMessageDirection, CrmMessageStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES } from '../../queue/queue.constants';
 import { Inject } from '@nestjs/common';
@@ -12,11 +12,11 @@ interface WebhookJobData {
   payload: unknown;
 }
 
-const STATUS_MAP: Record<string, MessageStatus> = {
-  sent: MessageStatus.SENT,
-  delivered: MessageStatus.DELIVERED,
-  read: MessageStatus.READ,
-  failed: MessageStatus.FAILED,
+const STATUS_MAP: Record<string, CrmMessageStatus> = {
+  sent: CrmMessageStatus.SENT,
+  delivered: CrmMessageStatus.DELIVERED,
+  read: CrmMessageStatus.READ,
+  failed: CrmMessageStatus.FAILED_PERMANENT,
 };
 
 
@@ -71,8 +71,8 @@ export class WebhookProcessor extends WorkerHost {
           messageId: message.id,
           whatsappAccountId: message.whatsappAccountId,
           dedupeKey,
-          type: event.status,
-          rawPayload: event as unknown as Prisma.InputJsonValue,
+          eventType: event.status, // schema field is eventType, not type
+          payload: event as unknown as Prisma.InputJsonValue,
         },
       });
     } catch (err: any) {
@@ -87,7 +87,10 @@ export class WebhookProcessor extends WorkerHost {
     if (!status) return;
 
     const timestampField =
-      status === MessageStatus.SENT ? 'sentAt' : status === MessageStatus.DELIVERED ? 'deliveredAt' : status === MessageStatus.READ ? 'readAt' : undefined;
+      status === CrmMessageStatus.SENT ? 'sentAt'
+      : status === CrmMessageStatus.DELIVERED ? 'deliveredAt'
+      : status === CrmMessageStatus.READ ? 'readAt'
+      : undefined;
 
     await this.prisma.message.update({
       where: { id: message.id },
@@ -98,24 +101,31 @@ export class WebhookProcessor extends WorkerHost {
       },
     });
 
-    const recipient = await this.prisma.campaignRecipient.findUnique({ where: { messageId: message.id } });
+    // phone is not unique alone — use findFirst scoped to the message's companyId
+    const recipient = await this.prisma.campaignRecipient.findFirst({
+      where: { contactId: message.contactId ?? undefined },
+    });
     if (recipient) {
       await this.prisma.campaignRecipient.update({
         where: { id: recipient.id },
-        data: { status, error: event.errorMessage, lastStatusChangeAt: new Date() },
+        data: { status: status as any, lastError: event.errorMessage, lastStatusChangeAt: new Date() },
       });
     }
   }
 
   private async applyInboundEvent(event: Extract<ParsedWebhookEvent, { kind: 'inbound' }>) {
-    const contact = await this.prisma.contact.findUnique({ where: { phone: event.from } });
+    // phone alone is not a unique key — use findFirst
+    const contact = await this.prisma.contact.findFirst({ where: { phone: event.from } });
     if (!contact) {
       this.logger.warn(`Inbound message from unknown contact ${event.from} — logging without a contact link`);
       return;
     }
 
     const dedupeKey = `inbound:${event.providerMessageId}`;
-    const whatsappAccount = await this.prisma.whatsAppAccount.findFirst({ where: { companyId: contact.companyId, isActive: true } });
+    // isActive doesn't exist — field is `active` in our schema
+    const whatsappAccount = await this.prisma.whatsAppAccount.findFirst({
+      where: { companyId: contact.companyId, active: true },
+    });
     if (!whatsappAccount) return;
 
     try {
@@ -123,8 +133,8 @@ export class WebhookProcessor extends WorkerHost {
         data: {
           contactId: contact.id,
           whatsappAccountId: whatsappAccount.id,
-          direction: MessageDirection.INBOUND,
-          status: MessageStatus.DELIVERED,
+          direction: CrmMessageDirection.INBOUND,
+          status: CrmMessageStatus.DELIVERED,
           providerMessageId: event.providerMessageId,
           body: event.body,
         },
@@ -135,8 +145,8 @@ export class WebhookProcessor extends WorkerHost {
           messageId: message.id,
           whatsappAccountId: whatsappAccount.id,
           dedupeKey,
-          type: 'inbound',
-          rawPayload: event as unknown as Prisma.InputJsonValue,
+          eventType: 'inbound', // schema field is eventType, not type
+          payload: event as unknown as Prisma.InputJsonValue,
         },
       });
 

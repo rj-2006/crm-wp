@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { CrmUserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -9,7 +9,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 @ApiBearerAuth()
 @ApiTags('users')
 @Controller('users')
-@Roles(Role.ADMIN) // Section 21: user management is Admin-only
+@Roles(CrmUserRole.ADMIN) // Section 21: user management is Admin-only
 export class UsersController {
   constructor(private usersService: UsersService) {}
 

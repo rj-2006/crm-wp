@@ -14,7 +14,7 @@ interface AuditEntry {
 
 interface ActivityEntry {
   companyId: string;
-  contactId?: string;
+  contactId: string;
   userId?: string;
   action: string; // mapped to `type` in Prisma (schema: type String @map("action"))
 }

@@ -12,8 +12,9 @@ export class UsersService {
   findAll(companyId: string) {
     return this.prisma.user.findMany({
       where: { companyId },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, email: true, role: true },
+      // No createdAt field on User in schema, so we can't orderBy it. Ordering by id as fallback.
+      orderBy: { id: 'desc' },
     });
   }
 
@@ -29,7 +30,7 @@ export class UsersService {
       entityType: 'User',
       entityId: user.id,
       action: 'user.invited',
-      changes: { role: dto.role },
+      changes: { role: dto.role } as any,
     });
 
     return { id: user.id, name: user.name, email: user.email, role: user.role };
@@ -47,7 +48,7 @@ export class UsersService {
       entityType: 'User',
       entityId: id,
       action: 'user.updated',
-      changes: dto,
+      changes: dto as any,
     });
 
     return { id: user.id, name: user.name, role: user.role };

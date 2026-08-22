@@ -42,7 +42,7 @@ export class MessageSendProcessor extends WorkerHost {
 
     try {
       const result = await this.provider.sendTemplateMessage({
-        whatsappAccountId: message.whatsappAccountId,
+        whatsappAccountId: message.whatsappAccountId!,
         to,
         templateName,
         language,
@@ -90,11 +90,13 @@ export class MessageSendProcessor extends WorkerHost {
   ) {
     await this.prisma.message.update({ where: { id: messageId }, data: { status, ...extra } });
 
-    const recipient = await this.prisma.campaignRecipient.findFirst({ where: { contactId: message.contactId, campaign: { messages: { some: { id: messageId } } } } });
+    const recipient = await this.prisma.campaignRecipient.findFirst({
+      where: { campaign: { messages: { some: { id: messageId } } } }
+    });
     if (recipient) {
       await this.prisma.campaignRecipient.update({
         where: { id: recipient.id },
-        data: { status, lastError: extra.errorMessage, lastStatusChangeAt: new Date() },
+        data: { status: status as any, lastError: extra.errorMessage, lastStatusChangeAt: new Date() },
       });
     }
   }

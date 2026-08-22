@@ -19,23 +19,32 @@ export class TemplatesSyncService {
 
     let updated = 0;
     for (const t of remoteTemplates) {
-      await this.prisma.messageTemplate.upsert({
-        where: { companyId_name: { companyId, name: t.name } },
-        update: {
-          approvalStatus: t.status,
-          providerTemplateId: t.providerTemplateId,
-          language: t.language,
-          bodyPreview: t.bodyPreview,
-        },
-        create: {
-          companyId,
-          name: t.name,
-          language: t.language,
-          approvalStatus: t.status,
-          providerTemplateId: t.providerTemplateId,
-          bodyPreview: t.bodyPreview,
-        },
+      const existing = await this.prisma.messageTemplate.findFirst({
+        where: { companyId, name: t.name },
       });
+
+      if (existing) {
+        await this.prisma.messageTemplate.update({
+          where: { id: existing.id },
+          data: {
+            approvalStatus: t.status,
+            providerTemplateId: t.providerTemplateId,
+            language: t.language,
+            structurePayload: { body: t.bodyPreview } as any,
+          },
+        });
+      } else {
+        await this.prisma.messageTemplate.create({
+          data: {
+            companyId,
+            name: t.name,
+            language: t.language,
+            approvalStatus: t.status,
+            providerTemplateId: t.providerTemplateId,
+            structurePayload: { body: t.bodyPreview } as any,
+          },
+        });
+      }
       updated++;
     }
 

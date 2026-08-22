@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { Inject } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';

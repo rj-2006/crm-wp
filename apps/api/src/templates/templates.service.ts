@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TemplateApproval } from '@prisma/client';
+import { CrmTemplateApprovalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class TemplatesService {
 
   findApproved(companyId: string) {
     return this.prisma.messageTemplate.findMany({
-      where: { companyId, approvalStatus: TemplateApproval.APPROVED },
+      where: { companyId, approvalStatus: CrmTemplateApprovalStatus.APPROVED },
     });
   }
 
