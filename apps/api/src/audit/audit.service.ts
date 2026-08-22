@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface AuditEntry {
@@ -7,7 +8,7 @@ interface AuditEntry {
   entityType: string;
   entityId: string;
   action: string;
-  changes?: Record<string, unknown>;
+  changes?: Prisma.JsonObject; // must be Prisma.JsonObject, not Record<string, unknown>
   ipAddress?: string;
 }
 
@@ -15,7 +16,7 @@ interface ActivityEntry {
   companyId: string;
   contactId?: string;
   userId?: string;
-  action: string;
+  action: string; // mapped to `type` in Prisma (schema: type String @map("action"))
 }
 
 
@@ -28,6 +29,8 @@ export class AuditService {
   }
 
   activity(entry: ActivityEntry) {
-    return this.prisma.activityLog.create({ data: entry });
+    // Prisma client exposes the column as `type` due to @map("action") in schema
+    const { action, ...rest } = entry;
+    return this.prisma.activityLog.create({ data: { ...rest, type: action } });
   }
 }
