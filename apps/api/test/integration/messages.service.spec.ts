@@ -2,10 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MessagesService } from '../../src/messages/messages.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { WHATSAPP_PROVIDER } from '../../src/whatsapp-adapter/whatsapp-provider.token';
-import { mockWhatsAppProvider, resetMockWhatsAppProvider } from '../mocks/mock-whatsapp.provider';
 import { getQueueToken } from '@nestjs/bullmq';
 import { QUEUE_NAMES } from '../../src/queue/queue.constants';
 import { AuditService } from '../../src/audit/audit.service';
+import { cleanDatabase } from './db-cleanup';
+import { mockWhatsAppProvider, resetMockWhatsAppProvider } from '../mocks/mock-whatsapp.provider';
 
 describe('MessagesService (Integration)', () => {
   let service: MessagesService;
@@ -40,14 +41,7 @@ describe('MessagesService (Integration)', () => {
     resetMockWhatsAppProvider();
     mockQueue.add.mockClear();
     
-    // Delete child tables first to satisfy foreign key constraints
-    await prisma.activityLog.deleteMany();
-    await prisma.message.deleteMany();
-    await prisma.messageTemplate.deleteMany();
-    await prisma.whatsAppAccount.deleteMany();
-    await prisma.contact.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.company.deleteMany();
+    await cleanDatabase(prisma);
   });
 
   describe('sendOne', () => {

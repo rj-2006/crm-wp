@@ -1,37 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { MessagesService } from '../../src/messages/messages.service';
+import { UsersService } from '../../src/users/users.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { WHATSAPP_PROVIDER } from '../../src/whatsapp-adapter/whatsapp-provider.token';
-import {
-  mockWhatsAppProvider,
-  resetMockWhatsAppProvider,
-} from '../mocks/mock-whatsapp.provider';
-import { getQueueToken } from '@nestjs/bullmq';
-import { QUEUE_NAMES } from '../../src/queue/queue.constants';
+import { AuditService } from '../../src/audit/audit.service';
+import { CrmUserRole } from '@prisma/client';
+import { cleanDatabase } from './db-cleanup';
 
-describe('MessagesService (Integration)', () => {
-  let service: MessagesService;
+describe('UsersService (Integration)', () => {
+  let service: UsersService;
   let prisma: PrismaService;
-
-  // mock the BullMQ queue so it doesn't actually try to start Redis jobs during tests
-  const mockQueue = { add: jest.fn() };
 
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        MessagesService,
-        PrismaService,
-        // Override the real WhatsApp provider with our mock
-        { provide: WHATSAPP_PROVIDER, useValue: mockWhatsAppProvider },
-        // Override the BullMQ queue with our mock
-        {
-          provide: getQueueToken(QUEUE_NAMES.MESSAGE_SEND),
-          useValue: mockQueue,
-        },
-      ],
+      providers: [UsersService, PrismaService, AuditService],
     }).compile();
 
-    service = module.get<MessagesService>(MessagesService);
+    service = module.get<UsersService>(UsersService);
     prisma = module.get<PrismaService>(PrismaService);
   });
 
@@ -40,19 +23,63 @@ describe('MessagesService (Integration)', () => {
   });
 
   beforeEach(async () => {
-    // Clear out our mocks before every test
-    resetMockWhatsAppProvider();
-    mockQueue.add.mockClear();
-
-    // Clear out the database tables we will be touching to ensure a clean slate
-    await prisma.message.deleteMany();
-    await prisma.messageTemplate.deleteMany();
-    await prisma.whatsAppAccount.deleteMany();
-    await prisma.contact.deleteMany();
-    await prisma.company.deleteMany();
+    await cleanDatabase(prisma);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  describe('create', () => {
+    it('should create a new user (with hashed password) and log an auditLog', async () => {
+      // 1. Arrange
+      const company = await prisma.company.create({ data: { name: 'Acme Corp' } });
+      const admin = await prisma.user.create({
+        data: { companyId: company.id, name: 'Admin', email: 'admin@acme.com', passwordHash: 'hash', role: CrmUserRole.ADMIN },
+      });
+
+      // 2. Act
+      const result = await service.create(company.id, admin.id, {
+        name: 'New Staff',
+        email: 'staff@acme.com',
+        password: 'password123',
+        role: CrmUserRole.STAFF,
+      });
+
+      // 3. Assert
+      expect(result.id).toBeDefined();
+      expect(result.email).toBe('staff@acme.com');
+      
+      // Check that the user is actually in the DB with a hashed password, NOT plain text
+      const dbUser = await prisma.user.findUnique({ where: { id: result.id } });
+      expect(dbUser?.passwordHash).not.toBe('password123'); // It should be hashed by bcrypt
+
+      // Check the Audit Log
+      const auditLogs = await prisma.auditLog.findMany({ where: { entityId: result.id } });
+      expect(auditLogs).toHaveLength(1);
+      expect(auditLogs[0].action).toBe('user.invited');
+      expect(auditLogs[0].userId).toBe(admin.id);
+    });
+  });
+
+  describe('update', () => {
+    it('should update a user role and log the change', async () => {
+      // 1. Arrange
+      const company = await prisma.company.create({ data: { name: 'Acme Corp' } });
+      const admin = await prisma.user.create({
+        data: { companyId: company.id, name: 'Admin', email: 'admin@acme.com', passwordHash: 'hash', role: CrmUserRole.ADMIN },
+      });
+      const staff = await prisma.user.create({
+        data: { companyId: company.id, name: 'Staff', email: 'staff@acme.com', passwordHash: 'hash', role: CrmUserRole.STAFF },
+      });
+
+      // 2. Act
+      const result = await service.update(company.id, admin.id, staff.id, { role: CrmUserRole.ADMIN });
+
+      // 3. Assert
+      expect(result.role).toBe(CrmUserRole.ADMIN);
+
+      // Check Audit Log
+      const auditLogs = await prisma.auditLog.findMany({ where: { entityId: staff.id, action: 'user.updated' } });
+      expect(auditLogs).toHaveLength(1);
+      expect(auditLogs[0].userId).toBe(admin.id);
+      expect((auditLogs[0].changes as any).role).toBe(CrmUserRole.ADMIN);
+    });
   });
 });

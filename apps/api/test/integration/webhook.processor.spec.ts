@@ -3,6 +3,7 @@ import { WebhookProcessor } from '../../src/webhooks/processors/webhook.processo
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { WHATSAPP_PROVIDER } from '../../src/whatsapp-adapter/whatsapp-provider.token';
 import { mockWhatsAppProvider, resetMockWhatsAppProvider } from '../mocks/mock-whatsapp.provider';
+import { cleanDatabase } from './db-cleanup';
 
 describe('WebhookProcessor (Integration)', () => {
   let processor: WebhookProcessor;
@@ -27,17 +28,7 @@ describe('WebhookProcessor (Integration)', () => {
 
   beforeEach(async () => {
     resetMockWhatsAppProvider();
-    
-    // Delete child tables first to satisfy foreign key constraints
-    await prisma.activityLog.deleteMany();
-    await prisma.webhookEvent.deleteMany();
-    await prisma.message.deleteMany();
-    await prisma.messageTemplate.deleteMany();
-    await prisma.campaignRecipient.deleteMany();
-    await prisma.whatsAppAccount.deleteMany();
-    await prisma.contact.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.company.deleteMany();
+    await cleanDatabase(prisma);
   });
 
   describe('process (Status Event)', () => {
