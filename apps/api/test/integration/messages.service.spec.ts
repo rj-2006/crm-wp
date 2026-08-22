@@ -6,12 +6,15 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { QUEUE_NAMES } from '../../src/queue/queue.constants';
 import { AuditService } from '../../src/audit/audit.service';
 import { cleanDatabase } from './db-cleanup';
-import { mockWhatsAppProvider, resetMockWhatsAppProvider } from '../mocks/mock-whatsapp.provider';
+import {
+  mockWhatsAppProvider,
+  resetMockWhatsAppProvider,
+} from '../mocks/mock-whatsapp.provider';
 
 describe('MessagesService (Integration)', () => {
   let service: MessagesService;
   let prisma: PrismaService;
-  
+
   // We mock the BullMQ queue so we don't actually try to start Redis jobs during tests
   const mockQueue = { add: jest.fn() };
 
@@ -24,7 +27,10 @@ describe('MessagesService (Integration)', () => {
         // Override the real WhatsApp provider with our mock
         { provide: WHATSAPP_PROVIDER, useValue: mockWhatsAppProvider },
         // Override the BullMQ queue with our mock
-        { provide: getQueueToken(QUEUE_NAMES.MESSAGE_SEND), useValue: mockQueue },
+        {
+          provide: getQueueToken(QUEUE_NAMES.MESSAGE_SEND),
+          useValue: mockQueue,
+        },
       ],
     }).compile();
 
@@ -40,27 +46,42 @@ describe('MessagesService (Integration)', () => {
     // Clear out our mocks before every test
     resetMockWhatsAppProvider();
     mockQueue.add.mockClear();
-    
+
     await cleanDatabase(prisma);
   });
 
   describe('sendOne', () => {
     it('should throw an error if WhatsApp account is not active', async () => {
       // 1. Arrange: Create our test data
-      const company = await prisma.company.create({ data: { name: 'Test Corp' } });
+      const company = await prisma.company.create({
+        data: { name: 'Test Corp' },
+      });
       const contact = await prisma.contact.create({
-        data: { companyId: company.id, phone: '+1234567890', consentStatus: 'OPTED_IN' },
+        data: {
+          companyId: company.id,
+          phone: '+1234567890',
+          consentStatus: 'OPTED_IN',
+        },
       });
       const template = await prisma.messageTemplate.create({
-        data: { companyId: company.id, name: 'hello_world', approvalStatus: 'APPROVED' },
+        data: {
+          companyId: company.id,
+          name: 'hello_world',
+          approvalStatus: 'APPROVED',
+        },
       });
-      
+
       // Crucial part: an INACTIVE WhatsApp account
       await prisma.whatsAppAccount.create({
         data: { companyId: company.id, phoneNumberId: '123', active: false },
       });
       const user = await prisma.user.create({
-        data: { companyId: company.id, name: 'Test', email: 't1@example.com', passwordHash: 'hash' },
+        data: {
+          companyId: company.id,
+          name: 'Test',
+          email: 't1@example.com',
+          passwordHash: 'hash',
+        },
       });
 
       // 2. Act & Assert
@@ -69,7 +90,7 @@ describe('MessagesService (Integration)', () => {
           contactId: contact.id,
           templateName: template.name,
           bodyParams: ['John'],
-        })
+        }),
       ).rejects.toThrow('No active WhatsApp account configured');
 
       // Ensure no queue job was added
@@ -78,20 +99,37 @@ describe('MessagesService (Integration)', () => {
 
     it('should create a message and queue a job if all conditions are met', async () => {
       // 1. Arrange
-      const company = await prisma.company.create({ data: { name: 'Test Corp' } });
+      const company = await prisma.company.create({
+        data: { name: 'Test Corp' },
+      });
       const contact = await prisma.contact.create({
-        data: { companyId: company.id, phone: '+1987654321', consentStatus: 'OPTED_IN' },
+        data: {
+          companyId: company.id,
+          phone: '+1987654321',
+          consentStatus: 'OPTED_IN',
+        },
       });
       const template = await prisma.messageTemplate.create({
-        data: { companyId: company.id, name: 'welcome', language: 'en', approvalStatus: 'APPROVED', structurePayload: { body: 'Hello {{1}}' } as any },
+        data: {
+          companyId: company.id,
+          name: 'welcome',
+          language: 'en',
+          approvalStatus: 'APPROVED',
+          structurePayload: { body: 'Hello {{1}}' } as any,
+        },
       });
-      
+
       // ACTIVE WhatsApp account
       await prisma.whatsAppAccount.create({
         data: { companyId: company.id, phoneNumberId: '456', active: true },
       });
       const user = await prisma.user.create({
-        data: { companyId: company.id, name: 'Test', email: 't2@example.com', passwordHash: 'hash' },
+        data: {
+          companyId: company.id,
+          name: 'Test',
+          email: 't2@example.com',
+          passwordHash: 'hash',
+        },
       });
 
       // 2. Act

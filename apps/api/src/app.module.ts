@@ -9,6 +9,12 @@ import { TagsModule } from './tags/tags.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ReportsModule } from './reports/reports.module';
+import { UsersModule } from './users/users.module';
+import { MessagesModule } from './messages/messages.module';
+import { TemplatesModule } from './templates/templates.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { AuditModule } from './audit/audit.module';
+import { WhatsAppAdapterModule } from './whatsapp-adapter/whatsapp-adapter.module';
 
 @Module({
   imports: [
@@ -37,6 +43,12 @@ import { ReportsModule } from './reports/reports.module';
     WhatsAppModule,
     CampaignsModule, // stub — Person A implements full module in M4
     ReportsModule,   // stub — Person B implements full module in M5
+    UsersModule,
+    MessagesModule,
+    TemplatesModule,
+    WebhooksModule,
+    AuditModule,
+    WhatsAppAdapterModule,
   ],
 })
 export class AppModule {}
