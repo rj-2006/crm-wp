@@ -20,11 +20,10 @@ export class ConfigService {
     // Mask everything sensitive — the API never returns a usable credential.
     return {
       id: account.id,
-      provider: account.provider,
       phoneNumberId: this.mask(account.phoneNumberId),
-      businessAccountId: this.mask(account.businessAccountId),
+      businessAccountId: this.mask(account.businessAccountId ?? ''),
       credentialsRef: account.credentialsRef,
-      isActive: account.isActive,
+      active: account.active,
     };
   }
 
@@ -50,7 +49,7 @@ export class ConfigService {
     return this.getForCompany(companyId);
   }
 
-  private mask(value: string): string {
+  private mask(value: string | null | undefined): string {
     if (!value || value.length <= 4) return '••••';
     return `••••••••${value.slice(-4)}`;
   }
