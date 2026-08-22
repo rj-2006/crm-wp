@@ -109,10 +109,17 @@ export class MetaCloudApiProvider implements WhatsAppProvider {
         }
 
         for (const message of value.messages ?? []) {
+          // Extract text, interactive button payload, or quick reply button text
+          const bodyText = message.text?.body 
+            ?? message.interactive?.button_reply?.id 
+            ?? message.interactive?.button_reply?.title 
+            ?? message.button?.text 
+            ?? '';
+
           events.push({
             kind: 'inbound',
             from: `+${message.from}`,
-            body: message.text?.body ?? '',
+            body: bodyText,
             providerMessageId: message.id,
             timestamp: new Date(Number(message.timestamp) * 1000),
           });

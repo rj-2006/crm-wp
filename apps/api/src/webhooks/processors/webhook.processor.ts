@@ -186,6 +186,32 @@ export class WebhookProcessor extends WorkerHost {
 
       // Re-opens the 24h free-form session window (Section 10.3).
       await this.prisma.contact.update({ where: { id: contact.id }, data: { lastInboundAt: event.timestamp } });
+
+      // Handle Opt-Out / Unsubscribe Commands
+      const text = event.body.trim().toLowerCase();
+      if (text === 'stop' || text === 'unsubscribe' || text === 'opt_out') {
+        this.logger.log(`Opt-out command received from ${event.from} (Contact ${contact.id})`);
+        
+        await this.prisma.contact.update({
+          where: { id: contact.id },
+          data: {
+            consentStatus: 'OPTED_OUT',
+            consentSource: 'whatsapp_webhook',
+            consentUpdatedAt: event.timestamp,
+          },
+        });
+
+        await this.prisma.consentLog.create({
+          data: {
+            companyId: contact.companyId,
+            contactId: contact.id,
+            type: 'opt_out',
+            source: 'whatsapp_webhook',
+            reason: 'Replied with unsubscribe keyword',
+            capturedAt: event.timestamp,
+          }
+        });
+      }
     } catch (err: any) {
       if (err.code === 'P2002') {
         this.logger.debug(`Duplicate inbound event ${dedupeKey}, skipping`);
