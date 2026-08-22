@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Workspace | WhatsApp Automation</title>
+    
+    <!-- Modern Typography: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Core Styles -->
+    <link rel="stylesheet" href="./styles/index.css">
+</head>
+<body>
+    <!-- Main App Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar glass-panel">
+            <div class="brand">
+                <div class="brand-icon"></div>
+                <h2>Aura CRM</h2>
+            </div>
+            
+            <ul class="nav-links">
+                <li class="nav-item active" data-view="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </li>
+                <li class="nav-item" data-view="campaigns">
+                    <span class="icon">🚀</span> Campaigns
+                </li>
+                <li class="nav-item" data-view="contacts">
+                    <span class="icon">👥</span> Contacts
+                </li>
+            </ul>
+
+            <div class="user-profile">
+                <div class="avatar">U</div>
+                <div class="user-info">
+                    <p class="user-name">Test User</p>
+                    <p class="user-role">Admin</p>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Dashboard View -->
+            <section id="view-dashboard" class="view active">
+                <header class="view-header">
+                    <h1>Global Overview</h1>
+                    <p class="subtitle">Live metrics across all your WhatsApp campaigns.</p>
+                </header>
+
+                <div class="metrics-grid" id="global-metrics-grid">
+                    <!-- Injected via JS -->
+                    <div class="metric-card glass-panel skeleton"></div>
+                    <div class="metric-card glass-panel skeleton"></div>
+                    <div class="metric-card glass-panel skeleton"></div>
+                </div>
+            </section>
+
+            <!-- Campaigns View -->
+            <section id="view-campaigns" class="view hidden">
+                <header class="view-header">
+                    <div class="header-left">
+                        <h1>Campaigns</h1>
+                        <p class="subtitle">Manage and execute your message broadcasts.</p>
+                    </div>
+                    <div class="header-right">
+                        <button class="btn btn-primary" id="btn-new-campaign">
+                            <span class="icon">+</span> New Campaign
+                        </button>
+                    </div>
+                </header>
+
+                <div class="table-container glass-panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Recipients</th>
+                                <th>Delivered</th>
+                                <th>Failed</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaigns-table-body">
+                            <!-- Injected via JS -->
+                            <tr class="skeleton-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                            <tr class="skeleton-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Contacts View -->
+            <section id="view-contacts" class="view hidden">
+                <header class="view-header">
+                    <div class="header-left">
+                        <h1>Contacts</h1>
+                        <p class="subtitle">Manage your audience and opt-ins.</p>
+                    </div>
+                </header>
+
+                <div class="table-container glass-panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Phone Number</th>
+                                <th>Consent Status</th>
+                                <th>Tags</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contacts-table-body">
+                            <!-- Injected via JS -->
+                            <tr class="skeleton-row"><td></td><td></td><td></td></tr>
+                            <tr class="skeleton-row"><td></td><td></td><td></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay hidden" id="campaign-modal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3>Create New Campaign</h3>
+                <button class="btn-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-campaign">
+                    <div class="form-group">
+                        <label>Campaign Name</label>
+                        <input type="text" id="input-camp-name" placeholder="e.g. Summer Promo" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Template</label>
+                        <select id="input-camp-template" class="w-full" required>
+                            <option value="">Loading templates...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>WhatsApp Account</label>
+                        <select id="input-camp-account" class="w-full" required>
+                            <option value="">Loading accounts...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Tag (Segment)</label>
+                        <select id="input-camp-tag" class="w-full" required>
+                            <option value="">Loading tags...</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">Create Draft</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="./src/api.js" type="module"></script>
+    <script src="./src/app.js" type="module"></script>
+</body>
+</html>
