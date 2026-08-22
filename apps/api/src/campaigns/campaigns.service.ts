@@ -79,4 +79,18 @@ export class CampaignsService {
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
   }
+
+  async findAll(companyId: string, skip: number = 0, take: number = 50) {
+    const [data, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where: { companyId },
+        orderBy: { id: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.campaign.count({ where: { companyId } }),
+    ]);
+
+    return { data, total };
+  }
 }
