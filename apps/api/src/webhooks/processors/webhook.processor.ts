@@ -101,15 +101,49 @@ export class WebhookProcessor extends WorkerHost {
       },
     });
 
-    // phone is not unique alone — use findFirst scoped to the message's companyId
-    const recipient = await this.prisma.campaignRecipient.findFirst({
-      where: { contactId: message.contactId ?? undefined },
-    });
-    if (recipient) {
-      await this.prisma.campaignRecipient.update({
-        where: { id: recipient.id },
-        data: { status: status as any, lastError: event.errorMessage, lastStatusChangeAt: new Date() },
+    if (message.campaignId) {
+      const recipient = await this.prisma.campaignRecipient.findUnique({
+        where: {
+          campaignId_contactId: {
+            campaignId: message.campaignId,
+            contactId: message.contactId,
+          }
+        },
       });
+
+      if (recipient) {
+        await this.prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: { status: status as any, lastError: event.errorMessage, lastStatusChangeAt: new Date() },
+        });
+
+        // Increment parent campaign metrics atomically
+        const incrementField = 
+          status === CrmMessageStatus.SENT ? 'sentCount'
+          : status === CrmMessageStatus.DELIVERED ? 'deliveredCount'
+          : status === CrmMessageStatus.READ ? 'readCount'
+          : status === CrmMessageStatus.FAILED_PERMANENT ? 'failedCount'
+          : undefined;
+
+        if (incrementField) {
+          await this.prisma.campaign.update({
+            where: { id: message.campaignId },
+            data: { [incrementField]: { increment: 1 } },
+          });
+        }
+      }
+    } else {
+      // Legacy behavior for one-off messages if needed, though they shouldn't have recipients
+      const recipient = await this.prisma.campaignRecipient.findFirst({
+        where: { contactId: message.contactId ?? undefined },
+        orderBy: { lastStatusChangeAt: 'desc' },
+      });
+      if (recipient) {
+        await this.prisma.campaignRecipient.update({
+          where: { id: recipient.id },
+          data: { status: status as any, lastError: event.errorMessage, lastStatusChangeAt: new Date() },
+        });
+      }
     }
   }
 

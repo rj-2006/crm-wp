@@ -1,8 +1,8 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { QUEUE_NAMES } from '../../../queue/queue.constants';
+import { PrismaService } from '../../prisma/prisma.service';
+import { QUEUE_NAMES } from '../../queue/queue.constants';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CrmCampaignStatus } from '@prisma/client';
