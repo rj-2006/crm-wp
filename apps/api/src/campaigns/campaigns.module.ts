@@ -1,9 +1,17 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { QUEUE_NAMES } from '../queue/queue.constants';
+import { CampaignsService } from './campaigns.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
-/**
- * Campaigns module stub.
- * TODO (Person A — M4): Implement campaign CRUD, BullMQ queue registration,
- * rate limiter, retry logic, and campaign launch endpoint here.
- */
-@Module({})
+@Module({
+  imports: [
+    PrismaModule,
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.CAMPAIGN_EXECUTE,
+    }),
+  ],
+  providers: [CampaignsService],
+  exports: [CampaignsService],
+})
 export class CampaignsModule {}
