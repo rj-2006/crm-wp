@@ -53,7 +53,7 @@ export class CampaignProcessor extends WorkerHost {
     // Find all OPTED_IN contacts matching the filter
     const contacts = await this.prisma.contact.findMany({
       where: {
-        companyId: campaign.companyId,
+        companyId: campaign.companyId ?? undefined,
         consentStatus: 'OPTED_IN',
         ...(filter?.tagId
           ? { tags: { some: { tagId: filter.tagId } } }

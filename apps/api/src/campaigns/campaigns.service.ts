@@ -5,11 +5,11 @@ import { QUEUE_NAMES } from '../queue/queue.constants';
 import { Queue } from 'bullmq';
 import { CrmCampaignStatus } from '@prisma/client';
 
-export interface CreateCampaignDto {
-  name: string;
-  templateId: string;
-  whatsappAccountId: string;
-  segmentFilter: { tagId: string }; // We'll stick to a simple tag string for V1 as recommended
+export class CreateCampaignDto {
+  name!: string;
+  templateId!: string;
+  whatsappAccountId!: string;
+  segmentFilter!: { tagId: string }; // We'll stick to a simple tag string for V1 as recommended
 }
 
 @Injectable()

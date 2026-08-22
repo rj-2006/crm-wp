@@ -10,7 +10,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
-  @Roles(CrmUserRole.ADMIN, CrmUserRole.MANAGER)
+  @Roles(CrmUserRole.ADMIN)
   @Post()
   async create(
     @Param('companyId') companyId: string,
@@ -20,7 +20,7 @@ export class CampaignsController {
     return this.campaignsService.create(companyId, req.user.sub, dto);
   }
 
-  @Roles(CrmUserRole.ADMIN, CrmUserRole.MANAGER)
+  @Roles(CrmUserRole.ADMIN)
   @Post(':campaignId/execute')
   async execute(
     @Param('companyId') companyId: string,
@@ -29,7 +29,7 @@ export class CampaignsController {
     return this.campaignsService.execute(companyId, campaignId);
   }
 
-  @Roles(CrmUserRole.ADMIN, CrmUserRole.MANAGER, CrmUserRole.STAFF)
+  @Roles(CrmUserRole.ADMIN, CrmUserRole.STAFF)
   @Get()
   async findAll(
     @Param('companyId') companyId: string,
@@ -39,7 +39,7 @@ export class CampaignsController {
     return this.campaignsService.findAll(companyId, skip ? parseInt(skip) : 0, take ? parseInt(take) : 50);
   }
 
-  @Roles(CrmUserRole.ADMIN, CrmUserRole.MANAGER, CrmUserRole.STAFF)
+  @Roles(CrmUserRole.ADMIN, CrmUserRole.STAFF)
   @Get(':campaignId')
   async findOne(
     @Param('companyId') companyId: string,
