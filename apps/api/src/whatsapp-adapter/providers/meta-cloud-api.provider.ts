@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
-import { TemplateApproval } from '@prisma/client';
+import { CrmTemplateApprovalStatus } from '@prisma/client';
 import {
   ParsedWebhookEvent,
   PermanentProviderError,
@@ -123,14 +123,14 @@ export class MetaCloudApiProvider implements WhatsAppProvider {
     return events;
   }
 
-  private mapApprovalStatus(status: string): TemplateApproval {
+  private mapApprovalStatus(status: string): CrmTemplateApprovalStatus {
     switch (status) {
       case 'APPROVED':
-        return TemplateApproval.APPROVED;
+        return CrmTemplateApprovalStatus.APPROVED;
       case 'REJECTED':
-        return TemplateApproval.REJECTED;
+        return CrmTemplateApprovalStatus.REJECTED;
       default:
-        return TemplateApproval.PENDING_REVIEW;
+        return CrmTemplateApprovalStatus.PENDING;
     }
   }
 

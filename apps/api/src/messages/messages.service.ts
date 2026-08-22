@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { MessageDirection, MessageStatus, TemplateApproval } from '@prisma/client';
+import { CrmMessageDirection, CrmMessageStatus, CrmTemplateApprovalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUE_NAMES } from '../queue/queue.constants';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -23,12 +23,12 @@ export class MessagesService {
     }
 
     const template = await this.prisma.messageTemplate.findFirst({
-      where: { companyId, name: dto.templateName, approvalStatus: TemplateApproval.APPROVED },
+      where: { companyId, name: dto.templateName, approvalStatus: CrmTemplateApprovalStatus.APPROVED },
     });
     if (!template) throw new BadRequestException('Template is not approved for sending');
 
     const whatsappAccount = await this.prisma.whatsAppAccount.findFirst({
-      where: { companyId, isActive: true },
+      where: { companyId, active: true },
     });
     if (!whatsappAccount) throw new BadRequestException('No active WhatsApp account configured');
 
@@ -37,9 +37,10 @@ export class MessagesService {
         contactId: contact.id,
         whatsappAccountId: whatsappAccount.id,
         templateId: template.id,
-        direction: MessageDirection.OUTBOUND,
-        status: MessageStatus.QUEUED,
-        body: this.renderPreview(template.bodyPreview, dto.bodyParams ?? []),
+        direction: CrmMessageDirection.OUTBOUND,
+        status: CrmMessageStatus.QUEUED,
+        // structurePayload holds the Meta template shape; extract body string if present
+        body: this.renderPreview((template.structurePayload as any)?.body ?? '', dto.bodyParams ?? []),
       },
     });
 

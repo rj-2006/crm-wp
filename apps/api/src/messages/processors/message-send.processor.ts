@@ -1,7 +1,7 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { MessageStatus } from '@prisma/client';
+import { CrmMessageStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_NAMES } from '../../queue/queue.constants';
 import { WHATSAPP_PROVIDER } from '../../whatsapp-adapter/whatsapp-provider.token';
@@ -33,7 +33,7 @@ export class MessageSendProcessor extends WorkerHost {
 
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
-      include: { whatsappAccount: true, campaignRecipient: true },
+      include: { whatsappAccount: true },
     });
     if (!message) {
       this.logger.warn(`Message ${messageId} no longer exists — skipping job`);
@@ -49,7 +49,7 @@ export class MessageSendProcessor extends WorkerHost {
         bodyParams,
       });
 
-      await this.markStatus(message.id, MessageStatus.SENT, {
+      await this.markStatus(message.id, CrmMessageStatus.SENT, {
         providerMessageId: result.providerMessageId,
         sentAt: new Date(),
       });
@@ -63,7 +63,7 @@ export class MessageSendProcessor extends WorkerHost {
       if (err instanceof PermanentProviderError) {
 
         this.logger.error(`Permanent failure sending message ${messageId}: ${err.message}`);
-        await this.markStatus(message.id, MessageStatus.FAILED, { errorMessage: err.message });
+        await this.markStatus(message.id, CrmMessageStatus.FAILED_PERMANENT, { errorMessage: err.message });
         return;
       }
 
@@ -77,7 +77,7 @@ export class MessageSendProcessor extends WorkerHost {
   async onFailed(job: Job<SendJobData>, err: Error) {
     if (job.attemptsMade >= (job.opts.attempts ?? 1)) {
 
-      await this.markStatus(job.data.messageId, MessageStatus.FAILED, {
+      await this.markStatus(job.data.messageId, CrmMessageStatus.FAILED_PERMANENT, {
         errorMessage: `Exhausted retries: ${err.message}`,
       });
     }
@@ -85,16 +85,16 @@ export class MessageSendProcessor extends WorkerHost {
 
   private async markStatus(
     messageId: string,
-    status: MessageStatus,
+    status: CrmMessageStatus,
     extra: Partial<{ providerMessageId: string; sentAt: Date; errorMessage: string }>,
   ) {
     await this.prisma.message.update({ where: { id: messageId }, data: { status, ...extra } });
 
-    const recipient = await this.prisma.campaignRecipient.findUnique({ where: { messageId } });
+    const recipient = await this.prisma.campaignRecipient.findFirst({ where: { contactId: message.contactId, campaign: { messages: { some: { id: messageId } } } } });
     if (recipient) {
       await this.prisma.campaignRecipient.update({
         where: { id: recipient.id },
-        data: { status, error: extra.errorMessage, lastStatusChangeAt: new Date() },
+        data: { status, lastError: extra.errorMessage, lastStatusChangeAt: new Date() },
       });
     }
   }

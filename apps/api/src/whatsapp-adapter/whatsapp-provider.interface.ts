@@ -1,4 +1,4 @@
-import { TemplateApproval } from '@prisma/client';
+import { CrmTemplateApprovalStatus } from '@prisma/client';
 
 export interface SendTemplateMessageInput {
   whatsappAccountId: string;
@@ -15,7 +15,7 @@ export interface SendTemplateMessageResult {
 export interface RemoteTemplate {
   name: string;
   language: string;
-  status: TemplateApproval;
+  status: CrmTemplateApprovalStatus;
   providerTemplateId: string;
   bodyPreview: string;
 }
