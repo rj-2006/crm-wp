@@ -17,6 +17,7 @@ export class CampaignsController {
     @Request() req: any,
     @Body() dto: CreateCampaignDto,
   ) {
+    console.log('Incoming DTO in controller:', dto);
     return this.campaignsService.create(companyId, req.user.sub, dto);
   }
 

@@ -4,11 +4,22 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { QUEUE_NAMES } from '../queue/queue.constants';
 import { Queue } from 'bullmq';
 import { CrmCampaignStatus } from '@prisma/client';
+import { IsString, IsNotEmpty, IsObject } from 'class-validator';
 
 export class CreateCampaignDto {
+  @IsString()
+  @IsNotEmpty()
   name!: string;
+
+  @IsString()
+  @IsNotEmpty()
   templateId!: string;
+
+  @IsString()
+  @IsNotEmpty()
   whatsappAccountId!: string;
+
+  @IsObject()
   segmentFilter!: { tagId: string }; // We'll stick to a simple tag string for V1 as recommended
 }
 

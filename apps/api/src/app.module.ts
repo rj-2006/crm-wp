@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { JwtModule } from '@nestjs/jwt';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
@@ -20,6 +22,12 @@ import { WhatsAppAdapterModule } from './whatsapp-adapter/whatsapp-adapter.modul
   imports: [
     // Config — loads .env, makes ConfigService available everywhere
     ConfigModule.forRoot({ isGlobal: true }),
+
+    // Throttler — global rate limiting (e.g. 100 reqs per 1 minute)
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
 
     // Prisma — @Global() module; PrismaService injectable everywhere
     PrismaModule,
@@ -49,6 +57,12 @@ import { WhatsAppAdapterModule } from './whatsapp-adapter/whatsapp-adapter.modul
     WebhooksModule,
     AuditModule,
     WhatsAppAdapterModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
