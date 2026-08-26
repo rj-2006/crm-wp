@@ -10,6 +10,7 @@ import * as contactsService from "./services/contacts";
 import * as campaignsService from "./services/campaigns";
 import * as templatesService from "./services/templates";
 import * as messagesService from "./services/messages";
+import api from "./services/api";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -828,11 +829,18 @@ function KpiCard({ label, value, delta, tone = "accent", icon: Icon }) {
 
 function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
   const optedIn = contacts.filter(c => c.consent === "opted_in").length;
-  const active = campaigns.filter(c => c.status === "sending" || c.status === "queued").length;
+  const optedOut = contacts.filter(c => c.consent === "opted_out").length;
+  const pending = contacts.filter(c => c.consent !== "opted_in" && c.consent !== "opted_out").length;
+  const active = campaigns.filter(c => c.status === "sending" || c.status === "queued" || c.status === "running").length;
   const totalSent = campaigns.reduce((a, c) => a + c.sent, 0);
   const totalDelivered = campaigns.reduce((a, c) => a + c.delivered, 0);
   const rate = totalSent ? Math.round((totalDelivered / totalSent) * 100) : 0;
-  const totalConsent = consentSplit.reduce((a, c) => a + c.value, 0) || 1;
+  const dynamicConsentSplit = [
+    { name: "Opted in", key: "opted_in", value: optedIn },
+    { name: "Pending", key: "pending", value: pending },
+    { name: "Opted out", key: "opted_out", value: optedOut },
+  ];
+  const totalConsent = dynamicConsentSplit.reduce((a, c) => a + c.value, 0) || 1;
 
   return (
     <div>
@@ -868,8 +876,8 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           <p className="text-lg font-semibold w-full text-left mb-6">Consent Status</p>
           <div
             className="relative w-40 h-40 rounded-full flex items-center justify-center"
-            style={{ background: `conic-gradient(${consentSplit.map((c, i) => {
-              const start = consentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
+            style={{ background: `conic-gradient(${dynamicConsentSplit.map((c, i) => {
+              const start = dynamicConsentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
               const end = start + (c.value / totalConsent * 100);
               return `${consentColors[c.key]} ${start}% ${end}%`;
             }).join(", ")})` }}
@@ -880,7 +888,7 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
             </div>
           </div>
           <div className="w-full mt-6 space-y-2.5">
-            {consentSplit.map(c => (
+            {dynamicConsentSplit.map(c => (
               <div key={c.key} className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded" style={{ background: consentColors[c.key] }} />
@@ -896,7 +904,6 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       <div className="crm-card overflow-hidden">
         <div className="p-4 border-b border-default flex justify-between items-center bg-surface-bright">
           <p className="text-lg font-semibold">Recent Campaigns</p>
-          <button className="text-xs font-medium text-primary hover:underline">View All</button>
         </div>
         <div className="overflow-x-auto crm-scrollbar">
           <table className="w-full text-sm min-w-[600px] border-collapse">
@@ -939,7 +946,7 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
 /*  SendMessageModal — 1:1 WhatsApp message to a single contact        */
 /* ------------------------------------------------------------------ */
 function SendMessageModal({ contact, templates, onClose, notify }) {
-  const approvedTemplates = (templates || []).filter(t => t.status === 'approved');
+  const approvedTemplates = (templates || []).filter(t => (t.approvalStatus || t.status || '').toUpperCase() === 'APPROVED');
   const [templateId, setTemplateId] = useState(approvedTemplates[0]?.id || '');
   const [sending, setSending] = useState(false);
   const template = approvedTemplates.find(t => t.id === templateId);
@@ -948,7 +955,7 @@ function SendMessageModal({ contact, templates, onClose, notify }) {
     if (!templateId) return;
     setSending(true);
     try {
-      await messagesService.sendMessage({ contactId: contact.id, templateId, variables: {} });
+      await messagesService.sendMessage({ contactId: contact.id, templateName: template.name });
       notify(`Message queued for ${contact.name}`);
       onClose();
     } catch (err) {
@@ -1063,6 +1070,26 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
   const filterRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  const handleToggleConsent = async (contact, type) => {
+    try {
+      await contactsService.updateConsent(contact.id, type);
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: c.segment || 'All',
+        district: c.district || 'None',
+        consent: (c.consentStatus || 'unknown').toLowerCase(),
+        tags: c.tags?.map(t => t.tag.name) || [],
+        lastActivity: new Date(c.lastInboundAt || c.createdAt || Date.now()).toLocaleDateString()
+      })));
+      notify(`${contact.name} consent updated to ${type}`);
+    } catch (err) {
+      alert('Failed to update consent: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   useEffect(() => {
     if (!filterOpen) return;
     const onClickOutside = (e) => {
@@ -1160,43 +1187,6 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
           <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium">
             <UploadCloud size={15} /> {isImporting ? "Importing..." : "Import CSV"}
           </button>
-          <div style={{ position: "relative" }} ref={filterRef}>
-            <button
-              onClick={() => setFilterOpen(o => !o)}
-              className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium"
-            >
-              <Filter size={15} /> Filter
-              {consentFilter !== "All" && (
-                <span style={{
-                  width: 16, height: 16, borderRadius: "50%", background: "var(--primary)", color: "#fff",
-                  fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center"
-                }}>1</span>
-              )}
-            </button>
-            {filterOpen && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 6px)", left: 0, width: 200, maxWidth: "calc(100vw - 32px)",
-                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                boxShadow: "0 10px 30px -8px rgba(0,0,0,0.25)", padding: 10, zIndex: 50,
-                animation: "popin 160ms ease-out both"
-              }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, margin: "2px 4px 8px" }}>
-                  Consent status
-                </p>
-                {consentOptions.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { setConsentFilter(opt.value); setFilterOpen(false); }}
-                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
-                    style={consentFilter === opt.value ? { color: "var(--primary)", fontWeight: 600, background: "var(--primary-soft)" } : undefined}
-                  >
-                    {opt.label}
-                    {consentFilter === opt.value && <Check size={14} />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium">
             <UserPlus size={15} /> Add contact
           </button>
@@ -1213,6 +1203,14 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
           <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
         </div>
         <div className="crm-card flex-1 flex items-center px-3 py-2">
+          <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Consent</label>
+          <select
+            value={consentFilter}
+            onChange={e => setConsentFilter(e.target.value)}
+            className="crm-input flex-1 px-3 py-2 text-sm mr-4"
+          >
+            {consentOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
           <Tag size={13} className="text-muted mr-2 shrink-0" />
           <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Tag</label>
           <select
@@ -1277,14 +1275,30 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
                 <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
                 <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => setSendTarget(c)}
-                    disabled={c.consent === 'opted_out'}
-                    title={c.consent === 'opted_out' ? 'Contact has opted out' : 'Send WhatsApp message'}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs text-primary hover:text-primary font-medium border border-primary/30 hover:border-primary rounded-lg px-2.5 py-1.5 disabled:opacity-30 disabled:cursor-not-allowed bg-primary-soft"
-                  >
-                    <MessageSquare size={12} /> Send
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleConsent(c, 'OPTED_IN')}
+                      disabled={c.consent === 'opted_in'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-[10px] text-green-600 font-medium border border-green-600/30 hover:border-green-600 rounded px-1.5 py-0.5 disabled:opacity-0"
+                    >
+                      Opt In
+                    </button>
+                    <button
+                      onClick={() => handleToggleConsent(c, 'OPTED_OUT')}
+                      disabled={c.consent === 'opted_out'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-[10px] text-red-600 font-medium border border-red-600/30 hover:border-red-600 rounded px-1.5 py-0.5 disabled:opacity-0"
+                    >
+                      Opt Out
+                    </button>
+                    <button
+                      onClick={() => setSendTarget(c)}
+                      disabled={c.consent === 'opted_out'}
+                      title={c.consent === 'opted_out' ? 'Contact has opted out' : 'Send WhatsApp message'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs text-primary hover:text-primary font-medium border border-primary/30 hover:border-primary rounded-lg px-2.5 py-1.5 disabled:opacity-30 disabled:cursor-not-allowed bg-primary-soft ml-auto"
+                    >
+                      <MessageSquare size={12} /> Send
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1315,7 +1329,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
-  const [templateId, setTemplateId] = useState(templates.find(t => t.status === "approved")?.id || "");
+  const [templateId, setTemplateId] = useState(templates.find(t => (t.approvalStatus || t.status || '').toUpperCase() === "APPROVED")?.id || "");
   const [availableTags, setAvailableTags] = useState([]);
   const eligible = contacts.filter(c =>
     c.consent === "opted_in" &&
@@ -1391,7 +1405,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               className={`w-full text-left border rounded-lg px-3 py-2.5 flex items-center justify-between text-sm transition-colors
                 ${templateId === t.id ? "border-primary bg-primary-soft" : "border-default"} ${t.status !== "approved" ? "opacity-40 cursor-not-allowed" : "hover:border-muted-2"}`}>
               <div><p className="font-medium">{t.name}</p><p className="text-xs text-muted">{t.category}</p></div>
-              {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : <Badge tone="warning">Pending review</Badge>}
+              {(t.approvalStatus || t.status || '').toUpperCase() === "APPROVED" ? <Badge tone="accent">Approved</Badge> : <Badge tone="warning">Pending review</Badge>}
             </button>
           ))}
           <p className="text-xs text-muted pt-1">Only provider-approved templates can be used for a bulk send.</p>
@@ -1436,7 +1450,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
             Continue <ChevronRight size={15} />
           </button>
         ) : (
-          <button onClick={() => onLaunch({ name: name || "Untitled campaign", tags: selectedTags, template: template.name, recipients: eligible.length })}
+          <button onClick={() => onLaunch({ name: name || "Untitled campaign", tags: selectedTags, template: template?.name, templateId, recipients: eligible.length })}
             className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm">
             <Send size={14} /> Launch campaign
           </button>
@@ -1458,9 +1472,28 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
       </div>
       {showWizard && (
         <NewCampaignWizard contacts={contacts} templates={templates} onClose={() => setShowWizard(false)}
-          onLaunch={(payload) => {
-            setCampaigns(prev => [{ id: `CMP-0${17 + prev.length}`, name: payload.name, template: payload.template, segment: payload.segment, status: "queued", recipients: payload.recipients, sent: 0, delivered: 0, read: 0, failed: 0 }, ...prev]);
-            notify(`"${payload.name}" queued for ${payload.recipients} recipients`);
+          onLaunch={async (payload) => {
+            try {
+              // Get companyId from localStorage user data
+              const storedUser = JSON.parse(localStorage.getItem("crm_user") || '{}');
+              const companyId = storedUser.companyId || "54bfead7-d6fd-4fd4-a306-caefd49068f5";
+              
+              // Fetch whatsapp accounts to get a valid ID
+              const accountsRes = await api.get("/whatsapp/accounts").catch(() => ({ data: [] }));
+              const defaultAccountId = accountsRes.data[0]?.id || "3ede6bff-f7e6-4f00-89e5-925d3f557178";
+
+              const res = await campaignsService.createCampaign(companyId, {
+                name: payload.name || "Untitled campaign",
+                templateId: payload.templateId,
+                whatsappAccountId: defaultAccountId,
+                segmentFilter: { tagId: payload.tags[0] },
+              });
+              const c = res.data;
+              setCampaigns(prev => [{ id: c.id, name: c.name, template: payload.template, segment: payload.segment || "All", status: (c.status || 'draft').toLowerCase(), recipients: c.totalRecipients || payload.recipients || 0, sent: 0, delivered: 0, read: 0, failed: 0 }, ...prev]);
+              notify(`"${payload.name}" created with ${payload.recipients} recipients`);
+            } catch (err) {
+              notify(`Failed to create campaign: ${err.response?.data?.message || err.message}`);
+            }
             setShowWizard(false);
           }} />
       )}
@@ -1511,7 +1544,7 @@ function Templates({ templates, onMenuClick, menuOpen }) {
           <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
             <div className="flex items-start justify-between mb-2">
               <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
-              {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : t.status === "rejected" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
+              {(t.approvalStatus || t.status || '').toUpperCase() === "APPROVED" ? <Badge tone="accent">Approved</Badge> : (t.approvalStatus || t.status || '').toUpperCase() === "REJECTED" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
             </div>
             <div className="bg-bg border border-default rounded-lg p-3 mt-3">
               <p className="text-sm">{t.body}</p>
@@ -1633,7 +1666,7 @@ function Admin({ users, onMenuClick, menuOpen }) {
                 <td className="px-4 py-3">{u.name}</td>
                 <td className="px-4 py-3 text-muted">{u.role}</td>
                 <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
-                <td className="px-4 py-3">{u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}</td>
+                <td className="px-4 py-3"><Badge tone="accent">Active</Badge></td>
               </tr>
             ))}
           </tbody>
@@ -1649,72 +1682,85 @@ function Admin({ users, onMenuClick, menuOpen }) {
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("crm_session_active") || null);
-  const [user, setUser] = useState(token ? { name: "Admin", role: "Administrator" } : null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("crm_user");
+      return stored ? JSON.parse(stored) : (token ? { name: "Admin", role: "Administrator", companyId: "54bfead7-d6fd-4fd4-a306-caefd49068f5" } : null);
+    } catch {
+      return token ? { name: "Admin", role: "Administrator", companyId: "54bfead7-d6fd-4fd4-a306-caefd49068f5" } : null;
+    }
+  });
+  const [isLoading, setIsLoading] = useState(!!token);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  
   const [contacts, setContacts] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
-  const [templates, setTemplates] = useState(initialTemplates); // Keep mock templates for now
-  const [users, setUsers] = useState(initialUsers); // Keep mock users for now
+  const [templates, setTemplates] = useState([]); 
+  const [users, setUsers] = useState([]); 
   const [dark, setDark] = useState(false);
+  
   const notify = (msg) => setToast(msg);
 
   useEffect(() => {
-    // Attempt to fetch contacts to verify if cookie is valid
+    if (!token) return;
     setIsLoading(true);
-    contactsService.getContacts()
-      .then(res => {
-        setToken("active");
-        localStorage.setItem("crm_session_active", "true");
-        setUser({ name: "Admin", role: "Administrator" });
-    // Fake the user object for UI purposes since we don't have a /me endpoint
-    setUser({ name: "Admin", role: "Administrator" });
+
+    const compId = user?.companyId || "54bfead7-d6fd-4fd4-a306-caefd49068f5";
     
     Promise.all([
-      contactsService.getContacts().catch(() => ({ data: [] })),
-      campaignsService.getCampaigns().catch(() => ({ data: [] }))
-    ]).then(([resContacts, resCampaigns]) => {
-      // Map backend data to frontend expected shapes
+      api.get("/contacts").catch(() => ({ data: [] })),
+      api.get(`/companies/${compId}/campaigns`).catch(() => ({ data: [] })),
+      api.get("/templates").catch(() => ({ data: [] })),
+      api.get("/users").catch(() => ({ data: [] }))
+    ]).then(([resContacts, resCampaigns, resTemplates, resUsers]) => {
       setContacts(resContacts.data.map(c => ({
         id: c.id,
         name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
         phone: c.phone,
-        segment: 'All', // We don't track state segment in DB right now
-        district: 'None',
-        consent: c.consentStatus.toLowerCase(),
-        lastActivity: 'just now',
+        segment: c.segment || 'All',
+        district: c.district || 'None',
+        consent: (c.consentStatus || 'unknown').toLowerCase(),
+        lastActivity: new Date(c.lastInboundAt || c.createdAt || Date.now()).toLocaleDateString()
       })));
-      setCampaigns(resCampaigns.data.map(c => ({
+      const campaignsArr = Array.isArray(resCampaigns.data) ? resCampaigns.data : (resCampaigns.data?.data || []);
+      setCampaigns(campaignsArr.map(c => ({
         id: c.id,
         name: c.name,
-        template: c.templateId, // Need actual name
-        status: c.status.toLowerCase(),
-        recipients: c.totalRecipients,
-        sent: c.sentCount,
-        delivered: c.deliveredCount,
-        read: c.readCount,
-        failed: c.failedCount,
+        template: c.template?.name || c.templateName || "Unknown",
+        status: (c.status || 'draft').toLowerCase(),
+        recipients: c.totalRecipients || c.recipientsCount || 0,
+        sent: c.sentCount || 0,
+        delivered: c.deliveredCount || 0,
+        read: c.readCount || 0,
+        failed: c.failedCount || 0,
       })));
-      });
+      setTemplates(resTemplates.data || []);
+      setUsers(resUsers.data || []);
       setIsLoading(false);
     }).catch(err => {
-      // Cookie is invalid or expired
       if (err.response?.status === 401) {
         setToken(null);
         setUser(null);
         localStorage.removeItem("crm_session_active");
+        localStorage.removeItem("crm_user");
       }
       setIsLoading(false);
     });
-  }, []);
+  }, [token]); // removed user to prevent loop
 
   const handleLogin = async (credentials) => {
     try {
       const res = await authService.login(credentials.email, credentials.password);
+      const userData = { 
+        name: res.data.user?.name || "Admin", 
+        role: res.data.user?.role === "ADMIN" ? "Administrator" : "Sales / Support",
+        companyId: res.data.user?.companyId 
+      };
       localStorage.setItem("crm_session_active", "true");
-      setUser({ name: res.data.user?.name || "Admin", role: "Administrator" });
+      localStorage.setItem("crm_user", JSON.stringify(userData));
+      setUser(userData);
       setToken("active");
       // Trigger a reload to fetch data via the useEffect
       window.location.reload();
@@ -1728,6 +1774,7 @@ export default function App() {
       await authService.logout();
     } catch (e) {}
     localStorage.removeItem("crm_session_active");
+    localStorage.removeItem("crm_user");
     setToken(null);
     setUser(null);
   };

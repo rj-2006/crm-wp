@@ -10,3 +10,5 @@ export const importContacts = (file) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
+
+export const updateConsent = (id, type) => api.post(`/contacts/${id}/consent`, { type });

@@ -7,8 +7,11 @@ async function main() {
   console.log('Start seeding...');
 
   // 1. Create a Company
-  const company = await prisma.company.create({
-    data: {
+  const company = await prisma.company.upsert({
+    where: { id: 'seed-company' },
+    update: {},
+    create: {
+      id: 'seed-company',
       name: 'Acme Corp',
     },
   });
@@ -16,8 +19,13 @@ async function main() {
 
   // 2. Create an Admin User
   const passwordHash = await bcrypt.hash('password123', 10);
-  const admin = await prisma.user.create({
-    data: {
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@acme.com' },
+    update: {
+      passwordHash: passwordHash,
+      role: 'ADMIN',
+    },
+    create: {
       companyId: company.id,
       name: 'Admin User',
       email: 'admin@acme.com',

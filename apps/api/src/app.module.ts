@@ -32,12 +32,7 @@ import { WhatsAppAdapterModule } from './whatsapp-adapter/whatsapp-adapter.modul
     // Prisma — @Global() module; PrismaService injectable everywhere
     PrismaModule,
 
-    // JWT — global so JwtService is available for AuthGuard without re-importing
-    JwtModule.register({
-      global: true,
-      secret: process.env.JWT_SECRET || 'dev-secret',
-      signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN || '15m') as any },
-    }),
+    // Removed JwtModule.register(...)
 
     // BullMQ — connects to Redis for campaign queue (M4)
     BullModule.forRoot({

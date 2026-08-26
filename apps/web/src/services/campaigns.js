@@ -1,6 +1,6 @@
 import api from "./api";
 
-export const getCampaigns = () => api.get("/campaigns");
-export const createCampaign = (campaign) => api.post("/campaigns", campaign);
-export const launchCampaign = (id) => api.post(`/campaigns/${id}/launch`);
-export const getCampaignStats = (id) => api.get(`/campaigns/${id}/stats`);
+export const getCampaigns = (companyId) => api.get(`/companies/${companyId}/campaigns`);
+export const createCampaign = (companyId, campaign) => api.post(`/companies/${companyId}/campaigns`, campaign);
+export const executeCampaign = (companyId, campaignId) => api.post(`/companies/${companyId}/campaigns/${campaignId}/execute`);
+export const getCampaign = (companyId, campaignId) => api.get(`/companies/${companyId}/campaigns/${campaignId}`);

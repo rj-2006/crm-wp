@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -19,24 +19,33 @@ export class UsersService {
   }
 
   async create(companyId: string, actorId: string, dto: CreateUserDto) {
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = await this.prisma.user.create({
-      data: { companyId, name: dto.name, email: dto.email, passwordHash, role: dto.role },
-    });
+    try {
+      const passwordHash = await bcrypt.hash(dto.password, 10);
+      const user = await this.prisma.user.create({
+        data: { companyId, name: dto.name, email: dto.email, passwordHash, role: dto.role },
+      });
 
-    await this.audit.log({
-      companyId,
-      userId: actorId,
-      entityType: 'User',
-      entityId: user.id,
-      action: 'user.invited',
-      changes: { role: dto.role } as any,
-    });
+      await this.audit.log({
+        companyId,
+        userId: actorId,
+        entityType: 'User',
+        entityId: user.id,
+        action: 'user.invited',
+        changes: { role: dto.role } as any,
+      });
 
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+      return { id: user.id, name: user.name, email: user.email, role: user.role };
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ConflictException('Email already in use');
+      }
+      throw err;
+    }
   }
 
   async update(companyId: string, actorId: string, id: string, dto: UpdateUserDto) {
+    const existing = await this.prisma.user.findFirst({ where: { id, companyId } });
+    if (!existing) throw new NotFoundException('User not found');
     const user = await this.prisma.user.update({
       where: { id },
       data: dto,

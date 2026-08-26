@@ -16,7 +16,11 @@ export class TemplatesService {
     });
   }
 
-  findOne(companyId: string, id: string) {
-    return this.prisma.messageTemplate.findFirst({ where: { id, companyId } });
+  async findOne(companyId: string, id: string) {
+    const template = await this.prisma.messageTemplate.findFirst({ where: { id, companyId } });
+    if (!template) {
+      throw new (require('@nestjs/common').NotFoundException)('Template not found');
+    }
+    return template;
   }
 }
