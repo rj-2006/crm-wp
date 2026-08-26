@@ -3,12 +3,13 @@ import {
   LayoutDashboard, Users, Send, FileText, BarChart3, Settings, LogOut,
   Search, Plus, Filter, Check, CheckCheck, X, ChevronRight, ChevronLeft,
   HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus,
-  Eye, EyeOff, Sparkles, Sun, Moon, UploadCloud
+  Eye, EyeOff, Sparkles, Sun, Moon, UploadCloud, MessageSquare, Tag
 } from "lucide-react";
 import * as authService from "./services/auth";
 import * as contactsService from "./services/contacts";
 import * as campaignsService from "./services/campaigns";
 import * as templatesService from "./services/templates";
+import * as messagesService from "./services/messages";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -934,6 +935,66 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
 /*  /contacts                                                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  SendMessageModal — 1:1 WhatsApp message to a single contact        */
+/* ------------------------------------------------------------------ */
+function SendMessageModal({ contact, templates, onClose, notify }) {
+  const approvedTemplates = (templates || []).filter(t => t.status === 'approved');
+  const [templateId, setTemplateId] = useState(approvedTemplates[0]?.id || '');
+  const [sending, setSending] = useState(false);
+  const template = approvedTemplates.find(t => t.id === templateId);
+
+  const handleSend = async () => {
+    if (!templateId) return;
+    setSending(true);
+    try {
+      await messagesService.sendMessage({ contactId: contact.id, templateId, variables: {} });
+      notify(`Message queued for ${contact.name}`);
+      onClose();
+    } catch (err) {
+      alert('Failed to send: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+      <div className="crm-card w-full max-w-md p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <p className="font-semibold flex items-center gap-2"><MessageSquare size={16} className="text-primary" /> Send WhatsApp Message</p>
+          <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
+        </div>
+        <div className="mb-4 p-3 rounded-lg bg-surface-bright border border-default">
+          <p className="text-xs text-muted">To</p>
+          <p className="font-medium text-sm">{contact.name}</p>
+          <p className="text-xs text-muted crm-mono">{contact.phone}</p>
+        </div>
+        {approvedTemplates.length === 0 ? (
+          <p className="text-sm text-muted py-4 text-center">No approved templates available. Ask your admin to get a template approved first.</p>
+        ) : (
+          <>
+            <label className="block text-xs text-muted mb-1">Select Template</label>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto crm-scrollbar">
+              {approvedTemplates.map(t => (
+                <button key={t.id} onClick={() => setTemplateId(t.id)}
+                  className={`w-full text-left border rounded-lg px-3 py-2.5 text-sm transition-colors ${templateId === t.id ? 'border-primary bg-primary-soft' : 'border-default hover:border-muted-2'}`}>
+                  <p className="font-medium">{t.name}</p>
+                  {t.body && <p className="text-xs text-muted mt-0.5 line-clamp-2">{t.body}</p>}
+                </button>
+              ))}
+            </div>
+            <button onClick={handleSend} disabled={sending || !templateId}
+              className="crm-btn-primary w-full flex items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-40">
+              <Send size={14} /> {sending ? 'Sending...' : 'Send Message'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddContactPanel({ onClose, onAdd }) {
   const [form, setForm] = useState({ name: "", phone: "", segment: "Kerala", district: STATE_DISTRICTS["Kerala"][0], consent: "pending" });
 
@@ -990,13 +1051,15 @@ function AddContactPanel({ onClose, onAdd }) {
   );
 }
 
-function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
+function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templates }) {
   const [query, setQuery] = useState("");
-  const [segmentFilter, setSegmentFilter] = useState("All");
+  const [tagFilter, setTagFilter] = useState("All");
   const [consentFilter, setConsentFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [sendTarget, setSendTarget] = useState(null); // contact to send 1:1 message to
+  const [availableTags, setAvailableTags] = useState([]);
   const filterRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -1008,6 +1071,10 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [filterOpen]);
+
+  useEffect(() => {
+    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
+  }, []);
 
   const handleAdd = async (form) => {
     try {
@@ -1070,7 +1137,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     }
   };
 
-  const segments = ["All", ...INDIAN_STATES];
+  const tagOptions = ["All", ...availableTags.map(t => t.name)];
   const consentOptions = [
     { value: "All", label: "All" },
     { value: "opted_in", label: "Opted in" },
@@ -1078,7 +1145,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     { value: "pending", label: "Pending" },
   ];
   const filtered = contacts.filter(c =>
-    (segmentFilter === "All" || c.segment === segmentFilter) &&
+    (tagFilter === "All" || (c.tags || []).includes(tagFilter)) &&
     (consentFilter === "All" || c.consent === consentFilter) &&
     (c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query))
   );
@@ -1145,13 +1212,16 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           <span className="w-2 h-2 rounded-full bg-primary" />
           <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
         </div>
-        <div className="crm-card flex-1 flex items-center overflow-x-auto crm-scrollbar">
-          {segments.map(s => (
-            <button key={s} onClick={() => setSegmentFilter(s)}
-              className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
-              {s}
-            </button>
-          ))}
+        <div className="crm-card flex-1 flex items-center px-3 py-2">
+          <Tag size={13} className="text-muted mr-2 shrink-0" />
+          <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Tag</label>
+          <select
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+            className="crm-input flex-1 px-3 py-2 text-sm"
+          >
+            {tagOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
       </div>
 
@@ -1174,15 +1244,15 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
             <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Phone</th>
-              <th className="px-4 py-3 font-medium">State</th>
-              <th className="px-4 py-3 font-medium">District</th>
-              <th className="px-4 py-3 font-medium">Consent Status</th>
+              <th className="px-4 py-3 font-medium">Tags</th>
+              <th className="px-4 py-3 font-medium">Consent</th>
               <th className="px-4 py-3 font-medium">Last Activity</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-default">
             {filtered.map(c => (
-              <tr key={c.id} className="hover:bg-surface-bright transition-colors">
+              <tr key={c.id} className="hover:bg-surface-bright transition-colors group">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
@@ -1192,10 +1262,30 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                   </div>
                 </td>
                 <td className="px-4 py-3 crm-mono text-xs text-muted">{c.phone}</td>
-                <td className="px-4 py-3"><Badge tone="muted">{c.segment}</Badge></td>
-                <td className="px-4 py-3 text-sm text-muted">{c.district || "—"}</td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(c.tags || []).length > 0
+                      ? c.tags.map(tag => (
+                          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary-soft text-primary border border-primary/20">
+                            <Tag size={9} />{tag}
+                          </span>
+                        ))
+                      : <span className="text-muted-2 text-xs">—</span>
+                    }
+                  </div>
+                </td>
                 <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
                 <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => setSendTarget(c)}
+                    disabled={c.consent === 'opted_out'}
+                    title={c.consent === 'opted_out' ? 'Contact has opted out' : 'Send WhatsApp message'}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs text-primary hover:text-primary font-medium border border-primary/30 hover:border-primary rounded-lg px-2.5 py-1.5 disabled:opacity-30 disabled:cursor-not-allowed bg-primary-soft"
+                  >
+                    <MessageSquare size={12} /> Send
+                  </button>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted text-sm">No contacts match this search.</td></tr>}
@@ -1205,6 +1295,14 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           <span>Showing 1-{filtered.length} of {contacts.length.toLocaleString()} contacts</span>
         </div>
       </div>
+      {sendTarget && (
+        <SendMessageModal
+          contact={sendTarget}
+          templates={templates || []}
+          onClose={() => setSendTarget(null)}
+          notify={notify}
+        />
+      )}
     </div>
   );
 }
@@ -1216,13 +1314,23 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
-  const [segment, setSegment] = useState("Ernakulam");
+  const [selectedTags, setSelectedTags] = useState([]);
   const [templateId, setTemplateId] = useState(templates.find(t => t.status === "approved")?.id || "");
-  const segments = INDIAN_STATES;
-  const eligible = contacts.filter(c => c.segment === segment && c.consent === "opted_in");
-  const excluded = contacts.filter(c => c.segment === segment && c.consent !== "opted_in").length;
+  const [availableTags, setAvailableTags] = useState([]);
+  const eligible = contacts.filter(c =>
+    c.consent === "opted_in" &&
+    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
+  );
+  const excluded = contacts.filter(c =>
+    c.consent !== "opted_in" &&
+    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
+  ).length;
   const template = templates.find(t => t.id === templateId);
-  const steps = ["State", "Template", "Preview", "Launch"];
+  const steps = ["Audience", "Template", "Preview", "Launch"];
+
+  useEffect(() => {
+    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
+  }, []);
 
   return (
     <div className="crm-card p-5 mb-6">
@@ -1250,11 +1358,29 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
           <label className="block text-xs text-muted mb-1">Campaign name</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Seasonal Collection Launch"
             className="crm-input w-full px-3 py-2 text-sm mb-4" />
-          <label className="block text-xs text-muted mb-1">State</label>
-          <select value={segment} onChange={e => setSegment(e.target.value)} className="crm-input w-full px-3 py-2 text-sm mb-2">
-            {segments.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <p className="text-xs text-muted">{eligible.length} contacts eligible (opted in). {excluded > 0 && `${excluded} excluded — no consent on record.`}</p>
+          <label className="block text-xs text-muted mb-2">Target audience — filter by tags</label>
+          {availableTags.length === 0 ? (
+            <p className="text-xs text-muted mb-3 p-3 rounded-lg bg-surface-bright border border-default">No tags created yet. All opted-in contacts will be targeted.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {availableTags.map(tag => (
+                <button key={tag.id}
+                  onClick={() => setSelectedTags(prev => prev.includes(tag.name) ? prev.filter(t => t !== tag.name) : [...prev, tag.name])}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    selectedTags.includes(tag.name)
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-surface-bright border-default text-ink hover:border-muted-2'
+                  }`}>
+                  <Tag size={10} /> {tag.name}
+                  {selectedTags.includes(tag.name) && <Check size={10} />}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted">
+            {selectedTags.length === 0 ? 'All opted-in contacts' : `Contacts tagged: ${selectedTags.join(', ')}`} — <strong>{eligible.length}</strong> eligible.
+            {excluded > 0 && ` ${excluded} excluded — no consent on record.`}
+          </p>
         </div>
       )}
 
@@ -1284,7 +1410,8 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               <p className="text-xs text-muted">Recipients</p><p className="font-medium">{eligible.length} contacts</p>
             </div>
             <div className="border border-default rounded-lg px-3 py-2">
-              <p className="text-xs text-muted">State</p><p className="font-medium">{segment}</p>
+              <p className="text-xs text-muted">Tags</p>
+              <p className="font-medium">{selectedTags.length === 0 ? 'All opted-in' : selectedTags.join(', ')}</p>
             </div>
           </div>
         </div>
@@ -1309,7 +1436,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
             Continue <ChevronRight size={15} />
           </button>
         ) : (
-          <button onClick={() => onLaunch({ name: name || "Untitled campaign", segment, template: template.name, recipients: eligible.length })}
+          <button onClick={() => onLaunch({ name: name || "Untitled campaign", tags: selectedTags, template: template.name, recipients: eligible.length })}
             className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm">
             <Send size={14} /> Launch campaign
           </button>
@@ -1607,7 +1734,7 @@ export default function App() {
   const toggleMenu = () => setMobileOpen(o => !o);
   const pages = {
     dashboard: <Dashboard contacts={contacts} campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
-    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} templates={templates} />,
     campaigns: <Campaigns contacts={contacts} templates={templates} campaigns={campaigns} setCampaigns={setCampaigns} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
     templates: <Templates templates={templates} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
     reports: <Reports campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
