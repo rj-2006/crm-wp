@@ -1648,9 +1648,9 @@ function Admin({ users, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
-  const [token, setToken] = useState(localStorage.getItem("crm_token") || null);
+  const [token, setToken] = useState(localStorage.getItem("crm_session_active") || null);
   const [user, setUser] = useState(token ? { name: "Admin", role: "Administrator" } : null);
-  const [isLoading, setIsLoading] = useState(!!token);
+  const [isLoading, setIsLoading] = useState(true);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1662,12 +1662,13 @@ export default function App() {
   const notify = (msg) => setToast(msg);
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      return;
-    }
-    // We have a token, fetch real data
+    // Attempt to fetch contacts to verify if cookie is valid
     setIsLoading(true);
+    contactsService.getContacts()
+      .then(res => {
+        setToken("active");
+        localStorage.setItem("crm_session_active", "true");
+        setUser({ name: "Admin", role: "Administrator" });
     // Fake the user object for UI purposes since we don't have a /me endpoint
     setUser({ name: "Admin", role: "Administrator" });
     
@@ -1696,26 +1697,39 @@ export default function App() {
         read: c.readCount,
         failed: c.failedCount,
       })));
+      });
+      setIsLoading(false);
+    }).catch(err => {
+      // Cookie is invalid or expired
+      if (err.response?.status === 401) {
+        setToken(null);
+        setUser(null);
+        localStorage.removeItem("crm_session_active");
+      }
       setIsLoading(false);
     });
-  }, [token]);
+  }, []);
 
   const handleLogin = async (credentials) => {
     try {
       const res = await authService.login(credentials.email, credentials.password);
-      const access_token = res.data.accessToken;
-      localStorage.setItem("crm_token", access_token);
+      localStorage.setItem("crm_session_active", "true");
       setUser({ name: res.data.user?.name || "Admin", role: "Administrator" });
-      setIsLoading(true);
-      setToken(access_token);
+      setToken("active");
+      // Trigger a reload to fetch data via the useEffect
+      window.location.reload();
     } catch (err) {
       alert("Login failed: " + (err.response?.data?.message || err.message));
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("crm_token");
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (e) {}
+    localStorage.removeItem("crm_session_active");
     setToken(null);
+    setUser(null);
   };
 
   if (!token || !user) {
