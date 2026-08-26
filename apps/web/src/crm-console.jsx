@@ -3,8 +3,12 @@ import {
   LayoutDashboard, Users, Send, FileText, BarChart3, Settings, LogOut,
   Search, Plus, Filter, Check, CheckCheck, X, ChevronRight, ChevronLeft,
   HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus,
-  Eye, EyeOff, Sparkles, Sun, Moon
+  Eye, EyeOff, Sparkles, Sun, Moon, UploadCloud
 } from "lucide-react";
+import * as authService from "./services/auth";
+import * as contactsService from "./services/contacts";
+import * as campaignsService from "./services/campaigns";
+import * as templatesService from "./services/templates";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -499,7 +503,7 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
         <button onClick={onForgot} className="text-xs font-medium hover:underline" style={{ color: accentColor }}>Forgot password?</button>
       </div>
       <button
-        onClick={() => onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role })}
+        onClick={() => onLogin({ email: email.trim(), password })}
         className={`${btnClass} w-full py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
       >
         Sign in as {role} <ArrowRight size={15} />
@@ -992,7 +996,10 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
   const [consentFilter, setConsentFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const filterRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     if (!filterOpen) return;
     const onClickOutside = (e) => {
@@ -1001,6 +1008,67 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [filterOpen]);
+
+  const handleAdd = async (form) => {
+    try {
+      const [firstName, ...lastNameParts] = form.name.split(' ');
+      const lastName = lastNameParts.join(' ');
+      const res = await contactsService.addContact({
+        firstName,
+        lastName,
+        phone: form.phone,
+        status: "ACTIVE",
+        source: "manual",
+        customFields: { segment: form.segment, district: form.district }
+      });
+      // Optionally update consent immediately if not pending
+      if (form.consent !== 'pending') {
+        // Need to add this method or assume backend handles it. For now let's just refresh.
+      }
+      
+      // Reload contacts
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: 'All',
+        district: 'None',
+        consent: c.consentStatus.toLowerCase(),
+        lastActivity: 'just now',
+      })));
+      notify(`${form.name} added to contacts`);
+    } catch (err) {
+      alert("Failed to add contact: " + err.message);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const res = await contactsService.importContacts(file);
+      notify(`Imported ${res.data.imported}, Merged ${res.data.merged}, Skipped ${res.data.skipped}`);
+      
+      // Reload contacts
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: 'All',
+        district: 'None',
+        consent: c.consentStatus.toLowerCase(),
+        lastActivity: 'just now',
+      })));
+    } catch (err) {
+      alert("Failed to import CSV: " + err.message);
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const segments = ["All", ...INDIAN_STATES];
   const consentOptions = [
@@ -1021,6 +1089,10 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Contacts Directory" subtitle="Manage and segment your WhatsApp customer base." onMenuClick={onMenuClick} menuOpen={menuOpen} />
         <div className="flex gap-2 shrink-0">
+          <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleImport} />
+          <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <UploadCloud size={15} /> {isImporting ? "Importing..." : "Import CSV"}
+          </button>
           <div style={{ position: "relative" }} ref={filterRef}>
             <button
               onClick={() => setFilterOpen(o => !o)}
@@ -1091,8 +1163,8 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 
       {showAdd && (
         <AddContactPanel onClose={() => setShowAdd(false)} onAdd={(f) => {
-          setContacts(prev => [{ id: `C-0${240 + prev.length}`, name: f.name, phone: f.phone, segment: f.segment, district: f.district, consent: f.consent, lastActivity: "just now" }, ...prev]);
-          notify(`${f.name} added to contacts`);
+          handleAdd(f);
+          setShowAdd(false);
         }} />
       )}
 
@@ -1450,23 +1522,84 @@ function Admin({ users, onMenuClick, menuOpen }) {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem("crm_token") || null);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const [contacts, setContacts] = useState(initialContacts);
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
-  const [templates] = useState(initialTemplates);
-  const [users] = useState(initialUsers);
+  const [contacts, setContacts] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [templates, setTemplates] = useState(initialTemplates); // Keep mock templates for now
+  const [users, setUsers] = useState(initialUsers); // Keep mock users for now
   const [dark, setDark] = useState(false);
   const notify = (msg) => setToast(msg);
 
-  if (!user) {
+  useEffect(() => {
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    // We have a token, fetch real data
+    setIsLoading(true);
+    // Fake the user object for UI purposes since we don't have a /me endpoint
+    setUser({ name: "Admin", role: "Administrator" });
+    
+    Promise.all([
+      contactsService.getContacts().catch(() => ({ data: [] })),
+      campaignsService.getCampaigns().catch(() => ({ data: [] }))
+    ]).then(([resContacts, resCampaigns]) => {
+      // Map backend data to frontend expected shapes
+      setContacts(resContacts.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: 'All', // We don't track state segment in DB right now
+        district: 'None',
+        consent: c.consentStatus.toLowerCase(),
+        lastActivity: 'just now',
+      })));
+      setCampaigns(resCampaigns.data.map(c => ({
+        id: c.id,
+        name: c.name,
+        template: c.templateId, // Need actual name
+        status: c.status.toLowerCase(),
+        recipients: c.totalRecipients,
+        sent: c.sentCount,
+        delivered: c.deliveredCount,
+        read: c.readCount,
+        failed: c.failedCount,
+      })));
+      setIsLoading(false);
+    });
+  }, [token]);
+
+  const handleLogin = async (credentials) => {
+    try {
+      const res = await authService.login(credentials.email, credentials.password);
+      const access_token = res.data.accessToken;
+      localStorage.setItem("crm_token", access_token);
+      setToken(access_token);
+    } catch (err) {
+      alert("Login failed: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("crm_token");
+    setToken(null);
+  };
+
+  if (!token) {
     return (
       <div className={`crm-root${dark ? " dark" : ""}`}>
         <Tokens />
-        <LoginPage onLogin={setUser} />
+        <LoginPage onLogin={handleLogin} />
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center">Loading Data...</div>;
   }
 
   const toggleMenu = () => setMobileOpen(o => !o);
@@ -1482,7 +1615,7 @@ export default function App() {
   return (
     <div className={`crm-root min-h-screen flex${dark ? " dark" : ""}`}>
       <Tokens />
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setUser(null)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
       <div className="flex-1 min-w-0 flex flex-col">
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-7 lg:p-8">
           {pages[active]}
