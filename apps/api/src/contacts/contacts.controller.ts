@@ -39,6 +39,9 @@ export class ContactsController {
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(@Req() r: any, @UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new (require('@nestjs/common').BadRequestException)('No file uploaded');
+    }
     return this.s.importFromCsv(r.user.companyId, r.user.sub, file.buffer);
   }
 }

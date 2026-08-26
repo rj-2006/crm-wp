@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CrmConsentStatus } from '@prisma/client';
 @Injectable()
@@ -24,25 +24,33 @@ export class ContactsService {
       orderBy: { createdAt: 'desc' },
     });
   }
-  create(companyId: string, b: any, userId: string) {
-    return this.db.$transaction(async (tx) => {
-      const c = await tx.contact.create({
-        data: {
-          companyId,
-          firstName: b.firstName,
-          lastName: b.lastName,
-          phone: b.phone,
-          email: b.email,
-          status: b.status,
-          source: b.source,
-          customFields: b.customFields,
-        },
+  async create(companyId: string, b: any, userId: string) {
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const c = await tx.contact.create({
+          data: {
+            companyId,
+            firstName: b.firstName,
+            lastName: b.lastName,
+            phone: b.phone,
+            email: b.email,
+            status: b.status,
+            source: b.source,
+            customFields: b.customFields,
+          },
+        });
+        await tx.activityLog.create({
+          data: { companyId, contactId: c.id, userId, type: 'CONTACT_CREATED' },
+        });
+        return c;
       });
-      await tx.activityLog.create({
-        data: { companyId, contactId: c.id, userId, type: 'CONTACT_CREATED' },
-      });
-      return c;
-    });
+    } catch (err: any) {
+      // P2002 = Prisma unique constraint violation
+      if (err?.code === 'P2002') {
+        throw new ConflictException(`A contact with phone ${b.phone} already exists in your account`);
+      }
+      throw err;
+    }
   }
   async update(companyId: string, id: string, b: any, userId: string) {
     const old = await this.db.contact.findFirst({ where: { id, companyId } });
@@ -120,7 +128,7 @@ export class ContactsService {
       const address = rawAddress?.trim() || undefined;
 
       // --- Normalise phone to E.164 ---
-      let phone = rawPhone?.trim().replace(/\s+/g, '');
+      let phone = rawPhone?.trim().replace(/[\s\-().]/g, '');
       if (!phone) {
         conflicts.push({
           row: rowNum,
@@ -131,9 +139,23 @@ export class ContactsService {
         skipped++;
         continue;
       }
-      // Strip leading zeros or country code duplicates, then prefix +91
-      phone = phone.replace(/^(\+91|0091|91)/, '');
-      if (!/^\d{10}$/.test(phone)) {
+
+      // Strip known country code prefixes first
+      phone = phone.replace(/^(\+91|0091)/, '');
+
+      // Handle 11-digit numbers that still start with 0 (STD landlines like 05222236000)
+      // Strip the leading 0 — the +91 will be re-added below
+      if (/^0\d{6,10}$/.test(phone)) {
+        phone = phone.replace(/^0/, '');
+      }
+
+      // Strip a bare 91 prefix only if the result is a valid-length number
+      if (/^91\d{10}$/.test(phone)) {
+        phone = phone.replace(/^91/, '');
+      }
+
+      // Accept 7–11 digit numbers (covers mobiles, landlines, shortcodes)
+      if (!/^\d{7,11}$/.test(phone)) {
         conflicts.push({
           row: rowNum,
           name: name ?? '',
