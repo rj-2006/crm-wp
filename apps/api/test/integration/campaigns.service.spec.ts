@@ -83,8 +83,11 @@ describe('CampaignsService (Integration)', () => {
   describe('execute', () => {
     it('should mark campaign as SCHEDULED and enqueue job', async () => {
       const company = await prisma.company.create({ data: { name: 'Test Corp' } });
+      const account = await prisma.whatsAppAccount.create({
+        data: { companyId: company.id, phoneNumberId: '123', active: true },
+      });
       const campaign = await prisma.campaign.create({
-        data: { companyId: company.id, name: 'Test', status: CrmCampaignStatus.DRAFT },
+        data: { companyId: company.id, name: 'Test', status: CrmCampaignStatus.DRAFT, whatsappAccountId: account.id },
       });
 
       const result = await service.execute(company.id, campaign.id);
@@ -95,8 +98,11 @@ describe('CampaignsService (Integration)', () => {
 
     it('should fail if campaign is not in DRAFT status', async () => {
       const company = await prisma.company.create({ data: { name: 'Test Corp' } });
+      const account = await prisma.whatsAppAccount.create({
+        data: { companyId: company.id, phoneNumberId: '123', active: true },
+      });
       const campaign = await prisma.campaign.create({
-        data: { companyId: company.id, name: 'Test', status: CrmCampaignStatus.RUNNING },
+        data: { companyId: company.id, name: 'Test', status: CrmCampaignStatus.RUNNING, whatsappAccountId: account.id },
       });
 
       await expect(service.execute(company.id, campaign.id)).rejects.toThrow(BadRequestException);

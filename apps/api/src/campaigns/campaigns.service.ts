@@ -70,6 +70,18 @@ export class CampaignsService {
       throw new BadRequestException('Only DRAFT campaigns can be executed');
     }
 
+    if (!campaign.whatsappAccountId) {
+      throw new BadRequestException('Campaign is missing a WhatsApp account ID');
+    }
+
+    // Ensure whatsapp account is still active
+    const account = await this.prisma.whatsAppAccount.findFirst({
+      where: { id: campaign.whatsappAccountId, companyId, active: true },
+    });
+    if (!account) {
+      throw new BadRequestException('WhatsApp account is missing or inactive');
+    }
+
     // Update status to SCHEDULED
     const updated = await this.prisma.campaign.update({
       where: { id: campaignId },

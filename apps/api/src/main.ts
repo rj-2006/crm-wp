@@ -12,6 +12,14 @@ async function bootstrap() {
   // Security headers
   app.use(helmet());
 
+  if (process.env.NODE_ENV === 'production') {
+    const secret = process.env.JWT_SECRET;
+    if (!secret || secret.length < 32) {
+      console.error('FATAL ERROR: JWT_SECRET must be set and at least 32 characters long in production');
+      process.exit(1);
+    }
+  }
+
   // Strict validation
   app.useGlobalPipes(new ValidationPipe({ 
     transform: true,

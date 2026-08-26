@@ -37,7 +37,7 @@ export class ContactsController {
   }
 
   @Post('import')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
   importCsv(@Req() r: any, @UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new (require('@nestjs/common').BadRequestException)('No file uploaded');

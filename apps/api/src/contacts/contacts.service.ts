@@ -103,12 +103,18 @@ export class ContactsService {
   }> {
     const { parse } = await import('csv-parse/sync');
 
-    // Parse the CSV — columns: S.N, Name, Contact, Address (+ optional trailing empty)
-    const rows: string[][] = parse(fileBuffer, {
-      skip_empty_lines: true,
-      relax_column_count: true,
-      from_line: 2, // skip the header row
-    });
+    let rows: string[][];
+    try {
+      // Parse the CSV — columns: S.N, Name, Contact, Address (+ optional trailing empty)
+      rows = parse(fileBuffer, {
+        skip_empty_lines: true,
+        relax_column_count: true,
+        from_line: 2, // skip the header row
+        encoding: 'utf8',
+      });
+    } catch (err: any) {
+      throw new BadRequestException('Failed to parse CSV file. Ensure it is a valid CSV with UTF-8 encoding.');
+    }
 
     let imported = 0;
     let merged = 0;
