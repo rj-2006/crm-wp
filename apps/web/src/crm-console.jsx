@@ -1521,9 +1521,9 @@ function Admin({ users, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState(localStorage.getItem("crm_token") || null);
+  const [user, setUser] = useState(token ? { name: "Admin", role: "Administrator" } : null);
+  const [isLoading, setIsLoading] = useState(!!token);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1578,6 +1578,8 @@ export default function App() {
       const res = await authService.login(credentials.email, credentials.password);
       const access_token = res.data.accessToken;
       localStorage.setItem("crm_token", access_token);
+      setUser({ name: res.data.user?.name || "Admin", role: "Administrator" });
+      setIsLoading(true);
       setToken(access_token);
     } catch (err) {
       alert("Login failed: " + (err.response?.data?.message || err.message));
@@ -1589,7 +1591,7 @@ export default function App() {
     setToken(null);
   };
 
-  if (!token) {
+  if (!token || !user) {
     return (
       <div className={`crm-root${dark ? " dark" : ""}`}>
         <Tokens />
