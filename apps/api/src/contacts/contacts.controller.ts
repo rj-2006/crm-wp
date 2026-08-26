@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, Post, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Param, Query, Req, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ContactsService } from './contacts.service';
 import { AuthGuard } from '../common/auth.guard';
 import { CreateContactDto } from './dto/create-contact.dto';
@@ -33,5 +34,11 @@ export class ContactsController {
   @Post(':id/tags/:tagId')
   tag(@Req() r: any, @Param('id') id: string, @Param('tagId') tagId: string) {
     return this.s.addTag(r.user.companyId, id, tagId);
+  }
+
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  importCsv(@Req() r: any, @UploadedFile() file: Express.Multer.File) {
+    return this.s.importFromCsv(r.user.companyId, r.user.sub, file.buffer);
   }
 }
