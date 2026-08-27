@@ -8,17 +8,26 @@ RUN npm install
 
 COPY . .
 
-ARG REACT_APP_API_URL
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# Set your backend API URL with /api included
+ENV REACT_APP_API_URL=https://crm-wp-production.up.railway.app/api
 
 RUN npm run build
 
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
 
-RUN printf 'server {\n    listen 80;\n    location / {\n        root /usr/share/nginx/html;\n        index index.html index.htm;\n        try_files $uri $uri/ /index.html;\n    }\n}\n' > /etc/nginx/conf.d/default.conf
+RUN printf 'server {\n\
+    listen ${PORT};\n\
+    location / {\n\
+        root /usr/share/nginx/html;\n\
+        index index.html index.htm;\n\
+        try_files $uri $uri/ /index.html;\n\
+    }\n\
+}\n' > /etc/nginx/templates/default.conf.template
 
 COPY --from=builder /app/build /usr/share/nginx/html
+
+ENV PORT=80
 
 EXPOSE 80
 
