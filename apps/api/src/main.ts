@@ -1,45 +1,28 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
+
+  // Allowed origins list
+  const allowedOrigins = [
+    'https://web-production-ea2855.up.railway.app',
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGIN,
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ].filter(Boolean) as (string | RegExp)[];
+
+  // Also allow any dynamic Railway staging domain
+  allowedOrigins.push(/https:\/\/.*\.up\.railway\.app$/);
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || true,
+    origin: allowedOrigins,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
-  
-  // Security headers
-  app.use(helmet());
-  app.use(cookieParser());
 
-  if (process.env.NODE_ENV === 'production') {
-    const secret = process.env.JWT_SECRET;
-    if (!secret || secret.length < 32) {
-      console.error('FATAL ERROR: JWT_SECRET must be set and at least 32 characters long in production');
-      process.exit(1);
-    }
-  }
-
-  // Strict validation
-  app.useGlobalPipes(new ValidationPipe({ 
-    transform: true,
-    whitelist: true,
-    forbidNonWhitelisted: true, 
-  }));
-
-  const doc = SwaggerModule.createDocument(app, new DocumentBuilder()
-    .setTitle('WhatsApp CRM API')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build()
-  );
-  SwaggerModule.setup('docs', app, doc);
-
-  await app.listen(process.env.PORT || 3000);
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();
