@@ -1,37 +1,33 @@
-# Build stage
+# Stage 1: Build React
 FROM node:20-alpine AS builder
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy the root package.json if it exists
-COPY package*.json ./
-# Copy the web package.json
-COPY apps/web/package*.json ./apps/web/
-
-# Move into web dir
-WORKDIR /usr/src/app/apps/web
+COPY apps/web/package*.json ./
 RUN npm install
 
-# Copy only the web source code
 COPY apps/web ./
 
-# Ensure API URL points to the proxy path (which Nginx will handle)
-ENV REACT_APP_API_URL=/api
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
-# Build the React app
 RUN npm run build
 
-# Production stage
+# Stage 2: Serve with Nginx
 FROM nginx:alpine
 
-# Copy built assets from builder
-COPY --from=builder /usr/src/app/apps/web/build /usr/share/nginx/html
+# Generate Nginx configuration for React SPA routing
+RUN printf 'server {\n\
+    listen 80;\n\
+    location / {\n\
+        root /usr/share/nginx/html;\n\
+        index index.html index.htm;\n\
+        try_files $uri $uri/ /index.html;\n\
+    }\n\
+}\n' > /etc/nginx/conf.d/default.conf
 
-# Copy custom NGINX configuration
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/build /usr/share/nginx/html
 
-# Expose port 80
 EXPOSE 80
 
-# Start NGINX
 CMD ["nginx", "-g", "daemon off;"]
