@@ -1,17 +1,19 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Start seeding...');
+  const companyId = randomUUID();
 
   // 1. Create a Company
   const company = await prisma.company.upsert({
-    where: { id: 'seed-company' },
+    where: { id: companyId },
     update: {},
     create: {
-      id: 'seed-company',
+      id: companyId,
       name: 'Acme Corp',
     },
   });
