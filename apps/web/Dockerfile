@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# Set API URL with /api included
+# Set exact URL
 ENV REACT_APP_API_URL=https://crm-wp-production.up.railway.app/api
 
 RUN npm run build
@@ -28,7 +28,6 @@ RUN printf 'server {\n\
 COPY --from=builder /app/build /usr/share/nginx/html
 
 ENV PORT=80
-
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
