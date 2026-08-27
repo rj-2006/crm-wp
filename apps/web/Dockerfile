@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# Set your backend API URL with /api included
+# Set API URL with /api included
 ENV REACT_APP_API_URL=https://crm-wp-production.up.railway.app/api
 
 RUN npm run build
