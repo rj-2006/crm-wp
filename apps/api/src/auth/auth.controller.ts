@@ -18,10 +18,12 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const authData = await this.authService.login(dto.email, dto.password);
     
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('crm_token', authData.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax', // Must be 'none' for cross-subdomain Railway apps
       path: '/',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     });
@@ -33,10 +35,12 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   logout(@Res({ passthrough: true }) res: Response) {
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.clearCookie('crm_token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
     });
     return { message: 'Logged out successfully' };
