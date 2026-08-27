@@ -1,6 +1,10 @@
 {
   "name": "crm-whatsapp",
   "private": true,
+  "dependencies": {
+  "@prisma/client": "^6.19.3",
+  "prisma": "^6.19.3"
+  }
   "scripts": {
     "dev:api": "npm --prefix apps/api run start:dev",
     "build:api": "npm --prefix apps/api run build",
@@ -8,5 +12,6 @@
     "test:e2e": "npm --prefix apps/api run test:e2e",
     "db:migrate": "docker exec crm-postgres psql -U postgres -d crm_whatsapp -f /dev/stdin < apps/api/prisma/migration-m2-schema-fixes.sql",
     "prisma:generate": "npm --prefix apps/api exec -- prisma generate"
+    
   }
 }
