@@ -1,15 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   LayoutDashboard, Users, Send, FileText, BarChart3, Settings, LogOut,
   Search, Plus, Filter, Check, CheckCheck, X, ChevronRight, ChevronLeft,
-  HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus,
-  Eye, EyeOff, Sparkles, Sun, Moon, UploadCloud, MessageSquare, Tag
+  HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus, Trash2,
+  Eye, EyeOff, Sparkles, Sun, Moon
 } from "lucide-react";
-import * as authService from "./services/auth";
-import * as contactsService from "./services/contacts";
-import * as campaignsService from "./services/campaigns";
-import * as templatesService from "./services/templates";
-import * as messagesService from "./services/messages";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -46,7 +41,20 @@ const Tokens = () => (
       color: var(--ink);
       background: var(--bg);
       -webkit-font-smoothing: antialiased;
-      transition: background-color .2s ease, color .2s ease;
+    }
+    /* Theme switch now crossfades via the native View Transitions API (see
+       the toggle's onClick): the browser snapshots the screen before and
+       after the state flip and blends the two images as one, instead of us
+       interpolating dozens of individual background/text colors by hand.
+       That sidesteps the whole class of bugs we kept hitting — different
+       properties finishing at different times, background and text landing
+       on the same mid-gray together and killing contrast for a frame, etc.
+       — because there's only ever one thing animating: opacity of two flat
+       snapshots. Falls back to an instant swap in browsers without support
+       (see the document.startViewTransition feature check). */
+    ::view-transition-old(root), ::view-transition-new(root) {
+      animation-duration: 180ms;
+      animation-timing-function: ease-out;
     }
     .crm-root.dark {
       --bg: #14161C;
@@ -66,14 +74,6 @@ const Tokens = () => (
       --warning-soft: #3A311F;
     }
     .crm-mono { font-family: 'Inter', monospace; font-variant-numeric: tabular-nums; }
-
-    /* Broad theme-switch transition: every surface fades between light/dark
-       together, not just the root. Placed before the more specific rules
-       below so their own transition lists (which fully replace this) can
-       extend it rather than silently losing it. */
-    .crm-root, .crm-root * {
-      transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease, fill 260ms ease, stroke 260ms ease;
-    }
 
     .bg-surface { background: var(--surface); }
     .bg-bg { background: var(--bg); }
@@ -102,7 +102,7 @@ const Tokens = () => (
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      transition: background-color 260ms ease, border-color 150ms ease, color 260ms ease, box-shadow .15s ease;
+      transition: background-color 110ms ease-out, border-color 110ms ease-out, color 70ms ease-out 45ms, box-shadow .15s ease;
     }
     .crm-input:focus {
       border-color: var(--primary);
@@ -113,7 +113,7 @@ const Tokens = () => (
       background: var(--primary);
       color: #fff;
       border-radius: 8px;
-      transition: background-color 260ms ease, opacity .15s ease, transform .12s ease, box-shadow .12s ease;
+      transition: background-color 110ms ease-out, opacity .15s ease, transform .12s ease, box-shadow .12s ease;
       box-shadow: 0 1px 2px rgba(91,141,239,0.15);
     }
     .crm-btn-primary:hover { opacity: 0.92; box-shadow: 0 4px 10px -3px rgba(91,141,239,0.35); }
@@ -125,7 +125,7 @@ const Tokens = () => (
       color: var(--ink);
       border: 1px solid var(--border);
       border-radius: 8px;
-      transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease;
+      transition: background-color 110ms ease-out, border-color 110ms ease-out, color 70ms ease-out 45ms;
     }
     .crm-btn-secondary:hover { background: var(--surface-bright); }
 
@@ -133,7 +133,7 @@ const Tokens = () => (
       background: var(--accent);
       color: #fff;
       border-radius: 8px;
-      transition: background-color 260ms ease, opacity .15s ease, box-shadow .12s ease;
+      transition: background-color 110ms ease-out, opacity .15s ease, box-shadow .12s ease;
       box-shadow: 0 1px 2px rgba(74,222,154,0.15);
     }
     .crm-btn-accent:hover { opacity: 0.9; box-shadow: 0 4px 10px -3px rgba(74,222,154,0.4); }
@@ -142,7 +142,7 @@ const Tokens = () => (
 
     .crm-nav-item {
       border-radius: 6px;
-      transition: background-color 260ms ease, color 260ms ease;
+      transition: background-color 110ms ease-out, color 70ms ease-out 45ms;
     }
     .crm-nav-item-active {
       background: var(--accent-soft);
@@ -181,6 +181,26 @@ const Tokens = () => (
     .crm-backdrop-out { animation: backdrop-out 180ms ease-in both; }
 
     @keyframes popin { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes success-pop {
+      0%   { opacity: 0; transform: scale(0.85); }
+      12%  { opacity: 1; transform: scale(1.04); }
+      20%  { transform: scale(1); }
+      82%  { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.96); }
+    }
+    @keyframes success-ring {
+      0%   { opacity: 0; transform: scale(0.6); }
+      18%  { opacity: 1; transform: scale(1.35); }
+      45%  { opacity: 0.35; transform: scale(1.55); }
+      100% { opacity: 0; transform: scale(1.7); }
+    }
+    @keyframes success-check {
+      0%   { opacity: 0; transform: scale(0.4) rotate(-15deg); }
+      18%  { opacity: 1; transform: scale(1.12) rotate(0deg); }
+      28%  { transform: scale(1) rotate(0deg); }
+      100% { opacity: 1; transform: scale(1) rotate(0deg); }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Hamburger <-> X morph. Three bars rotate/fade into an X on .crm-burger-open. */
     .crm-burger { width: 20px; height: 16px; position: relative; display: inline-block; }
@@ -362,6 +382,87 @@ function CampaignStatusBadge({ status }) {
   return <Badge tone="muted">Draft</Badge>;
 }
 
+function CenterSuccess({ mode = "add", message, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 1400);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const isAdd = mode === "add";
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}
+    >
+      <div
+        className="crm-card"
+        style={{
+          padding: "28px 36px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 12,
+          boxShadow: "0 20px 45px -12px rgba(0,0,0,0.25)",
+          animation: "success-pop 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        }}
+      >
+        <span style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span
+            style={{
+              position: "absolute", inset: 0, borderRadius: "9999px",
+              background: isAdd ? "var(--accent-soft)" : "var(--danger-soft)",
+              animation: "success-ring 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
+            }}
+          />
+          <span
+            className="rounded-full flex items-center justify-center"
+            style={{
+              position: "relative", width: 44, height: 44, borderRadius: "9999px",
+              background: isAdd ? "var(--accent)" : "var(--danger)",
+              animation: "success-check 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
+            }}
+          >
+            {isAdd ? <Check size={22} color="#fff" strokeWidth={3} /> : <Trash2 size={19} color="#fff" strokeWidth={2.5} />}
+          </span>
+        </span>
+        <p className="text-sm font-medium text-ink whitespace-nowrap">{message}</p>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = false, loading = false, onConfirm, onCancel }) {
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+    >
+      <div onClick={onCancel} className="crm-backdrop-in" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} />
+      <div className="crm-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary"}`}>
+            <AlertTriangle size={17} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">{title}</p>
+            <p className="text-xs text-muted mt-1">{description}</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary px-3 py-2 text-sm font-medium disabled:opacity-40">Cancel</button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={`px-3 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
+            style={danger ? { background: "var(--danger)" } : undefined}
+          >
+            {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
+            {loading ? "Please wait…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Toast({ message, onClose }) {
   React.useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
@@ -379,6 +480,7 @@ function PageHeader({ title, subtitle, onMenuClick, menuOpen }) {
         onClick={onMenuClick}
         aria-label={menuOpen ? "Close menu" : "Open menu"}
         aria-expanded={!!menuOpen}
+        className="lg:hidden"
         style={{ padding: 10, marginLeft: -10, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
       >
         <span className={`crm-burger ${menuOpen ? "crm-burger-open" : ""}`}>
@@ -475,13 +577,11 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
       <label className="block text-xs font-medium text-muted mb-1.5">Full Name</label>
       <input
         value={name} onChange={e => setName(e.target.value)}
-        placeholder="John Doe"
         className="crm-input w-full px-3 py-2.5 text-sm mb-4"
       />
-      <label className="block text-xs font-medium text-muted mb-1.5">Work Email</label>
+      <label className="block text-xs font-medium text-muted mb-1.5">Mail</label>
       <input
         value={email} onChange={e => setEmail(e.target.value)}
-        placeholder="john.doe@bharatinfotechs.com"
         className="crm-input w-full px-3 py-2.5 text-sm mb-4"
       />
       <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
@@ -489,7 +589,6 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
         <input
           type={showPw ? "text" : "password"}
           value={password} onChange={e => setPassword(e.target.value)}
-          placeholder="••••••••"
           className="crm-input w-full px-3 py-2.5 text-sm pr-10"
         />
         <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-2">
@@ -504,7 +603,7 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
         <button onClick={onForgot} className="text-xs font-medium hover:underline" style={{ color: accentColor }}>Forgot password?</button>
       </div>
       <button
-        onClick={() => onLogin({ email: email.trim(), password })}
+        onClick={() => onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role })}
         className={`${btnClass} w-full py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
       >
         Sign in as {role} <ArrowRight size={15} />
@@ -633,7 +732,14 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
         </div>
 
         <button
-          onClick={() => setDark(d => !d)}
+          onClick={() => {
+            const flip = () => setDark(d => !d);
+            if (document.startViewTransition) {
+              document.startViewTransition(flip);
+            } else {
+              flip();
+            }
+          }}
           role="switch"
           aria-checked={dark}
           style={{
@@ -691,8 +797,7 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
   );
 }
 
-function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
-  const items = ROUTES.filter(r => r.roles.includes(user.role));
+function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
   const navigate = (key) => { setActive(key); setMobileOpen(false); };
 
   // Stay mounted a beat past close so the exit animation can finish playing.
@@ -714,11 +819,11 @@ function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen,
     <>
       <div
         onClick={() => setMobileOpen(false)}
-        className={closing ? "crm-backdrop-out" : "crm-backdrop-in"}
+        className={`lg:hidden ${closing ? "crm-backdrop-out" : "crm-backdrop-in"}`}
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 30 }}
       />
       <aside
-        className={`bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
+        className={`lg:hidden bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
         style={{
           position: "fixed", top: 0, left: 0, height: "100vh", width: "min(288px, 85vw)",
           zIndex: 40, display: "flex", flexDirection: "column", padding: "24px 16px",
@@ -727,6 +832,31 @@ function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen,
       >
         <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} onCloseClick={() => setMobileOpen(false)} dark={dark} setDark={setDark} />
       </aside>
+    </>
+  );
+}
+
+function DesktopSidebar({ items, active, setActive, user, onLogout, dark, setDark }) {
+  const navigate = (key) => setActive(key);
+  return (
+    <aside
+      className="hidden lg:flex bg-surface border-r border-default crm-scrollbar"
+      style={{
+        width: 288, flexShrink: 0, height: "100vh", position: "sticky", top: 0,
+        flexDirection: "column", padding: "24px 16px", overflowY: "auto"
+      }}
+    >
+      <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} dark={dark} setDark={setDark} />
+    </aside>
+  );
+}
+
+function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
+  const items = ROUTES.filter(r => r.roles.includes(user.role));
+  return (
+    <>
+      <DesktopSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} dark={dark} setDark={setDark} />
+      <MobileSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
     </>
   );
 }
@@ -850,12 +980,12 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           <p className="text-lg font-semibold mb-4">Delivery Performance</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={deliveryTrend}>
-              <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
-              <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} />
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
+              <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2">
@@ -864,10 +994,10 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           </div>
         </div>
 
-        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center justify-center">
+        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center">
           <p className="text-lg font-semibold w-full text-left mb-6">Consent Status</p>
           <div
-            className="relative w-40 h-40 rounded-full flex items-center justify-center"
+            className="relative w-40 h-40 rounded-full flex items-center justify-center my-auto"
             style={{ background: `conic-gradient(${consentSplit.map((c, i) => {
               const start = consentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
               const end = start + (c.value / totalConsent * 100);
@@ -935,68 +1065,9 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
 /*  /contacts                                                          */
 /* ------------------------------------------------------------------ */
 
-/* ------------------------------------------------------------------ */
-/*  SendMessageModal — 1:1 WhatsApp message to a single contact        */
-/* ------------------------------------------------------------------ */
-function SendMessageModal({ contact, templates, onClose, notify }) {
-  const approvedTemplates = (templates || []).filter(t => t.status === 'approved');
-  const [templateId, setTemplateId] = useState(approvedTemplates[0]?.id || '');
-  const [sending, setSending] = useState(false);
-  const template = approvedTemplates.find(t => t.id === templateId);
-
-  const handleSend = async () => {
-    if (!templateId) return;
-    setSending(true);
-    try {
-      await messagesService.sendMessage({ contactId: contact.id, templateId, variables: {} });
-      notify(`Message queued for ${contact.name}`);
-      onClose();
-    } catch (err) {
-      alert('Failed to send: ' + (err.response?.data?.message || err.message));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
-      <div className="crm-card w-full max-w-md p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <p className="font-semibold flex items-center gap-2"><MessageSquare size={16} className="text-primary" /> Send WhatsApp Message</p>
-          <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
-        </div>
-        <div className="mb-4 p-3 rounded-lg bg-surface-bright border border-default">
-          <p className="text-xs text-muted">To</p>
-          <p className="font-medium text-sm">{contact.name}</p>
-          <p className="text-xs text-muted crm-mono">{contact.phone}</p>
-        </div>
-        {approvedTemplates.length === 0 ? (
-          <p className="text-sm text-muted py-4 text-center">No approved templates available. Ask your admin to get a template approved first.</p>
-        ) : (
-          <>
-            <label className="block text-xs text-muted mb-1">Select Template</label>
-            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto crm-scrollbar">
-              {approvedTemplates.map(t => (
-                <button key={t.id} onClick={() => setTemplateId(t.id)}
-                  className={`w-full text-left border rounded-lg px-3 py-2.5 text-sm transition-colors ${templateId === t.id ? 'border-primary bg-primary-soft' : 'border-default hover:border-muted-2'}`}>
-                  <p className="font-medium">{t.name}</p>
-                  {t.body && <p className="text-xs text-muted mt-0.5 line-clamp-2">{t.body}</p>}
-                </button>
-              ))}
-            </div>
-            <button onClick={handleSend} disabled={sending || !templateId}
-              className="crm-btn-primary w-full flex items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-40">
-              <Send size={14} /> {sending ? 'Sending...' : 'Send Message'}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function AddContactPanel({ onClose, onAdd }) {
   const [form, setForm] = useState({ name: "", phone: "", segment: "Kerala", district: STATE_DISTRICTS["Kerala"][0], consent: "pending" });
+  const [saving, setSaving] = useState(false);
 
   const handleStateChange = (newState) => {
     // Reset district to the new state's first option whenever state changes,
@@ -1043,26 +1114,31 @@ function AddContactPanel({ onClose, onAdd }) {
           </select>
         </div>
       </div>
-      <button disabled={!form.name || !form.phone} onClick={() => { onAdd(form); onClose(); }}
-        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40">
-        Save contact
+      <button
+        disabled={!form.name || !form.phone || saving}
+        onClick={() => {
+          setSaving(true);
+          setTimeout(() => { onAdd(form); onClose(); }, 500);
+        }}
+        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
+      >
+        {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
+        {saving ? "Saving…" : "Save contact"}
       </button>
     </div>
   );
 }
 
-function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templates }) {
+function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
   const [query, setQuery] = useState("");
-  const [tagFilter, setTagFilter] = useState("All");
+  const [segmentFilter, setSegmentFilter] = useState("All");
   const [consentFilter, setConsentFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [sendTarget, setSendTarget] = useState(null); // contact to send 1:1 message to
-  const [availableTags, setAvailableTags] = useState([]);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [centerSuccess, setCenterSuccess] = useState(null);
   const filterRef = useRef(null);
-  const fileInputRef = useRef(null);
-
   useEffect(() => {
     if (!filterOpen) return;
     const onClickOutside = (e) => {
@@ -1072,72 +1148,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [filterOpen]);
 
-  useEffect(() => {
-    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
-  }, []);
-
-  const handleAdd = async (form) => {
-    try {
-      const [firstName, ...lastNameParts] = form.name.split(' ');
-      const lastName = lastNameParts.join(' ');
-      const res = await contactsService.addContact({
-        firstName,
-        lastName,
-        phone: form.phone,
-        status: "ACTIVE",
-        source: "manual",
-        customFields: { segment: form.segment, district: form.district }
-      });
-      // Optionally update consent immediately if not pending
-      if (form.consent !== 'pending') {
-        // Need to add this method or assume backend handles it. For now let's just refresh.
-      }
-      
-      // Reload contacts
-      const updated = await contactsService.getContacts();
-      setContacts(updated.data.map(c => ({
-        id: c.id,
-        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
-        phone: c.phone,
-        segment: 'All',
-        district: 'None',
-        consent: c.consentStatus.toLowerCase(),
-        lastActivity: 'just now',
-      })));
-      notify(`${form.name} added to contacts`);
-    } catch (err) {
-      alert("Failed to add contact: " + err.message);
-    }
-  };
-
-  const handleImport = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsImporting(true);
-    try {
-      const res = await contactsService.importContacts(file);
-      notify(`Imported ${res.data.imported}, Merged ${res.data.merged}, Skipped ${res.data.skipped}`);
-      
-      // Reload contacts
-      const updated = await contactsService.getContacts();
-      setContacts(updated.data.map(c => ({
-        id: c.id,
-        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
-        phone: c.phone,
-        segment: 'All',
-        district: 'None',
-        consent: c.consentStatus.toLowerCase(),
-        lastActivity: 'just now',
-      })));
-    } catch (err) {
-      alert("Failed to import CSV: " + err.message);
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const tagOptions = ["All", ...availableTags.map(t => t.name)];
+  const segments = ["All", ...INDIAN_STATES];
   const consentOptions = [
     { value: "All", label: "All" },
     { value: "opted_in", label: "Opted in" },
@@ -1145,7 +1156,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
     { value: "pending", label: "Pending" },
   ];
   const filtered = contacts.filter(c =>
-    (tagFilter === "All" || (c.tags || []).includes(tagFilter)) &&
+    (segmentFilter === "All" || c.segment === segmentFilter) &&
     (consentFilter === "All" || c.consent === consentFilter) &&
     (c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query))
   );
@@ -1156,10 +1167,6 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Contacts Directory" subtitle="Manage and segment your WhatsApp customer base." onMenuClick={onMenuClick} menuOpen={menuOpen} />
         <div className="flex gap-2 shrink-0">
-          <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleImport} />
-          <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <UploadCloud size={15} /> {isImporting ? "Importing..." : "Import CSV"}
-          </button>
           <div style={{ position: "relative" }} ref={filterRef}>
             <button
               onClick={() => setFilterOpen(o => !o)}
@@ -1212,16 +1219,13 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
           <span className="w-2 h-2 rounded-full bg-primary" />
           <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
         </div>
-        <div className="crm-card flex-1 flex items-center px-3 py-2">
-          <Tag size={13} className="text-muted mr-2 shrink-0" />
-          <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Tag</label>
-          <select
-            value={tagFilter}
-            onChange={e => setTagFilter(e.target.value)}
-            className="crm-input flex-1 px-3 py-2 text-sm"
-          >
-            {tagOptions.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div className="crm-card flex-1 flex items-center overflow-x-auto crm-scrollbar">
+          {segments.map(s => (
+            <button key={s} onClick={() => setSegmentFilter(s)}
+              className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
+              {s}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1233,75 +1237,128 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
 
       {showAdd && (
         <AddContactPanel onClose={() => setShowAdd(false)} onAdd={(f) => {
-          handleAdd(f);
-          setShowAdd(false);
+          setContacts(prev => [{ id: `C-0${240 + prev.length}`, name: f.name, phone: f.phone, segment: f.segment, district: f.district, consent: f.consent, lastActivity: "just now" }, ...prev]);
+          notify(`${f.name} added to contacts`);
+          setCenterSuccess({ mode: "add", message: `${f.name} added` });
         }} />
       )}
 
-      <div className="crm-card overflow-x-auto crm-scrollbar">
-        <table className="w-full text-sm min-w-[620px] border-collapse">
-          <thead>
-            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Phone</th>
-              <th className="px-4 py-3 font-medium">Tags</th>
-              <th className="px-4 py-3 font-medium">Consent</th>
-              <th className="px-4 py-3 font-medium">Last Activity</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-default">
+      {contacts.length === 0 ? (
+        <div className="crm-card p-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
+            <Users size={20} />
+          </div>
+          <p className="font-medium mb-1">No contacts yet</p>
+          <p className="text-sm text-muted mb-5">Add your first contact to start building your WhatsApp audience.</p>
+          <button onClick={() => setShowAdd(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <UserPlus size={15} /> Add contact
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Card list — small screens */}
+          <div className="sm:hidden space-y-3">
             {filtered.map(c => (
-              <tr key={c.id} className="hover:bg-surface-bright transition-colors group">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+              <div key={c.id} className="crm-card p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
                       {c.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
                     </span>
-                    <span className="font-medium">{c.name}</span>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{c.name}</p>
+                      <p className="crm-mono text-xs text-muted truncate">{c.phone}</p>
+                    </div>
                   </div>
-                </td>
-                <td className="px-4 py-3 crm-mono text-xs text-muted">{c.phone}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(c.tags || []).length > 0
-                      ? c.tags.map(tag => (
-                          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary-soft text-primary border border-primary/20">
-                            <Tag size={9} />{tag}
-                          </span>
-                        ))
-                      : <span className="text-muted-2 text-xs">—</span>
-                    }
-                  </div>
-                </td>
-                <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
-                <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => setSendTarget(c)}
-                    disabled={c.consent === 'opted_out'}
-                    title={c.consent === 'opted_out' ? 'Contact has opted out' : 'Send WhatsApp message'}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs text-primary hover:text-primary font-medium border border-primary/30 hover:border-primary rounded-lg px-2.5 py-1.5 disabled:opacity-30 disabled:cursor-not-allowed bg-primary-soft"
-                  >
-                    <MessageSquare size={12} /> Send
+                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-1" aria-label={`Remove ${c.name}`}>
+                    <X size={16} />
                   </button>
-                </td>
-              </tr>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted mb-2">
+                  <Badge tone="muted">{c.segment}</Badge>
+                  <span>{c.district || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <ConsentBadge consent={c.consent} />
+                  <span className="text-muted text-xs">{c.lastActivity}</span>
+                </div>
+              </div>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted text-sm">No contacts match this search.</td></tr>}
-          </tbody>
-        </table>
-        <div className="flex items-center justify-between px-4 py-3 border-t border-default text-xs text-muted">
-          <span>Showing 1-{filtered.length} of {contacts.length.toLocaleString()} contacts</span>
-        </div>
-      </div>
-      {sendTarget && (
-        <SendMessageModal
-          contact={sendTarget}
-          templates={templates || []}
-          onClose={() => setSendTarget(null)}
-          notify={notify}
+            {filtered.length === 0 && (
+              <div className="crm-card px-4 py-8 text-center text-muted text-sm">No contacts match this search.</div>
+            )}
+          </div>
+
+          {/* Table — sm and up */}
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
+            <table className="w-full text-sm min-w-[660px] border-collapse">
+              <thead>
+                <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Phone</th>
+                  <th className="px-4 py-3 font-medium">State</th>
+                  <th className="px-4 py-3 font-medium">District</th>
+                  <th className="px-4 py-3 font-medium">Consent Status</th>
+                  <th className="px-4 py-3 font-medium">Last Activity</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-default">
+                {filtered.map(c => (
+                  <tr key={c.id} className="hover:bg-surface-bright transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+                          {c.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
+                        </span>
+                        <span className="font-medium">{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 crm-mono text-xs text-muted">{c.phone}</td>
+                    <td className="px-4 py-3"><Badge tone="muted">{c.segment}</Badge></td>
+                    <td className="px-4 py-3 text-sm text-muted">{c.district || "—"}</td>
+                    <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
+                    <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-1" aria-label={`Remove ${c.name}`}>
+                        <X size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted text-sm">No contacts match this search.</td></tr>}
+              </tbody>
+            </table>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-default text-xs text-muted">
+              <span>Showing 1-{filtered.length} of {contacts.length.toLocaleString()} contacts</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove this contact?"
+          description={`${pendingDelete.name} will be removed from your contact list. This can't be undone.`}
+          confirmLabel="Remove contact"
+          danger
+          loading={deleting}
+          onCancel={() => !deleting && setPendingDelete(null)}
+          onConfirm={() => {
+            setDeleting(true);
+            setTimeout(() => {
+              setContacts(prev => prev.filter(c => c.id !== pendingDelete.id));
+              notify(`${pendingDelete.name} removed`);
+              setCenterSuccess({ mode: "remove", message: `${pendingDelete.name} removed` });
+              setDeleting(false);
+              setPendingDelete(null);
+            }, 500);
+          }}
         />
+      )}
+
+      {centerSuccess && (
+        <CenterSuccess mode={centerSuccess.mode} message={centerSuccess.message} onDone={() => setCenterSuccess(null)} />
       )}
     </div>
   );
@@ -1313,24 +1370,15 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templa
 
 function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
   const [step, setStep] = useState(1);
+  const [launching, setLaunching] = useState(false);
   const [name, setName] = useState("");
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [segment, setSegment] = useState("Ernakulam");
   const [templateId, setTemplateId] = useState(templates.find(t => t.status === "approved")?.id || "");
-  const [availableTags, setAvailableTags] = useState([]);
-  const eligible = contacts.filter(c =>
-    c.consent === "opted_in" &&
-    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
-  );
-  const excluded = contacts.filter(c =>
-    c.consent !== "opted_in" &&
-    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
-  ).length;
+  const segments = INDIAN_STATES;
+  const eligible = contacts.filter(c => c.segment === segment && c.consent === "opted_in");
+  const excluded = contacts.filter(c => c.segment === segment && c.consent !== "opted_in").length;
   const template = templates.find(t => t.id === templateId);
-  const steps = ["Audience", "Template", "Preview", "Launch"];
-
-  useEffect(() => {
-    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
-  }, []);
+  const steps = ["State", "Template", "Preview", "Launch"];
 
   return (
     <div className="crm-card p-5 mb-6">
@@ -1348,7 +1396,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               </span>
               {s}
             </div>
-            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "#EEF0F3" }} />}
+            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "var(--border)" }} />}
           </React.Fragment>
         ))}
       </div>
@@ -1358,29 +1406,11 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
           <label className="block text-xs text-muted mb-1">Campaign name</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Seasonal Collection Launch"
             className="crm-input w-full px-3 py-2 text-sm mb-4" />
-          <label className="block text-xs text-muted mb-2">Target audience — filter by tags</label>
-          {availableTags.length === 0 ? (
-            <p className="text-xs text-muted mb-3 p-3 rounded-lg bg-surface-bright border border-default">No tags created yet. All opted-in contacts will be targeted.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {availableTags.map(tag => (
-                <button key={tag.id}
-                  onClick={() => setSelectedTags(prev => prev.includes(tag.name) ? prev.filter(t => t !== tag.name) : [...prev, tag.name])}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    selectedTags.includes(tag.name)
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-surface-bright border-default text-ink hover:border-muted-2'
-                  }`}>
-                  <Tag size={10} /> {tag.name}
-                  {selectedTags.includes(tag.name) && <Check size={10} />}
-                </button>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-muted">
-            {selectedTags.length === 0 ? 'All opted-in contacts' : `Contacts tagged: ${selectedTags.join(', ')}`} — <strong>{eligible.length}</strong> eligible.
-            {excluded > 0 && ` ${excluded} excluded — no consent on record.`}
-          </p>
+          <label className="block text-xs text-muted mb-1">State</label>
+          <select value={segment} onChange={e => setSegment(e.target.value)} className="crm-input w-full px-3 py-2 text-sm mb-2">
+            {segments.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <p className="text-xs text-muted">{eligible.length} contacts eligible (opted in). {excluded > 0 && `${excluded} excluded — no consent on record.`}</p>
         </div>
       )}
 
@@ -1410,8 +1440,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               <p className="text-xs text-muted">Recipients</p><p className="font-medium">{eligible.length} contacts</p>
             </div>
             <div className="border border-default rounded-lg px-3 py-2">
-              <p className="text-xs text-muted">Tags</p>
-              <p className="font-medium">{selectedTags.length === 0 ? 'All opted-in' : selectedTags.join(', ')}</p>
+              <p className="text-xs text-muted">State</p><p className="font-medium">{segment}</p>
             </div>
           </div>
         </div>
@@ -1436,9 +1465,19 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
             Continue <ChevronRight size={15} />
           </button>
         ) : (
-          <button onClick={() => onLaunch({ name: name || "Untitled campaign", tags: selectedTags, template: template.name, recipients: eligible.length })}
-            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm">
-            <Send size={14} /> Launch campaign
+          <button
+            disabled={launching}
+            onClick={() => {
+              setLaunching(true);
+              setTimeout(() => {
+                onLaunch({ name: name || "Untitled campaign", segment, template: template.name, recipients: eligible.length });
+              }, 600);
+            }}
+            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
+          >
+            {launching
+              ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} /> Launching…</>
+              : <><Send size={14} /> Launch campaign</>}
           </button>
         )}
       </div>
@@ -1464,36 +1503,49 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
             setShowWizard(false);
           }} />
       )}
-      <div className="crm-perspective grid gap-3">
-        {campaigns.map(c => {
-          const pct = c.recipients ? Math.round((c.sent / c.recipients) * 100) : 0;
-          return (
-            <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="crm-mono text-xs text-muted">{c.id}</span>
-                    <CampaignStatusBadge status={c.status} />
+      {campaigns.length === 0 ? (
+        <div className="crm-card p-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-accent-soft text-accent flex items-center justify-center mx-auto mb-3">
+            <Send size={20} />
+          </div>
+          <p className="font-medium mb-1">No campaigns yet</p>
+          <p className="text-sm text-muted mb-5">Create your first campaign to start sending to opted-in contacts.</p>
+          <button onClick={() => setShowWizard(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <Plus size={15} /> New campaign
+          </button>
+        </div>
+      ) : (
+        <div className="crm-perspective grid gap-3">
+          {campaigns.map(c => {
+            const pct = c.recipients ? Math.round((c.sent / c.recipients) * 100) : 0;
+            return (
+              <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="crm-mono text-xs text-muted">{c.id}</span>
+                      <CampaignStatusBadge status={c.status} />
+                    </div>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
                   </div>
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
+                  <div className="flex gap-4 text-xs">
+                    <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
+                    <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
+                    <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
+                    <div className="text-center"><p className="text-muted">Failed</p><p className="crm-mono text-danger">{c.failed}</p></div>
+                  </div>
                 </div>
-                <div className="flex gap-4 text-xs">
-                  <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
-                  <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
-                  <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
-                  <div className="text-center"><p className="text-muted">Failed</p><p className="crm-mono text-danger">{c.failed}</p></div>
-                </div>
-              </div>
-              {c.status !== "draft" && (
-                <div className="mt-3 h-1.5 bg-bg rounded-full overflow-hidden">
-                  <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
-                </div>
-              )}
-            </TiltCard>
-          );
-        })}
-      </div>
+                {c.status !== "draft" && (
+                  <div className="mt-3 h-1.5 bg-bg rounded-full overflow-hidden">
+                    <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </TiltCard>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1502,24 +1554,94 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
 /*  /templates                                                         */
 /* ------------------------------------------------------------------ */
 
-function Templates({ templates, onMenuClick, menuOpen }) {
+function RequestTemplatePanel({ onClose, onRequest }) {
+  const [form, setForm] = useState({ name: "", category: "Marketing", body: "" });
+  const [sending, setSending] = useState(false);
+  return (
+    <div className="crm-card p-5 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-semibold flex items-center gap-2"><FileText size={15} /> Request new template</p>
+        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-xs text-muted mb-1">Template name</label>
+          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+            className="crm-input w-full px-3 py-2 text-sm" placeholder="e.g. Delivery Update" />
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Category</label>
+          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+            className="crm-input w-full px-3 py-2 text-sm">
+            <option>Marketing</option><option>Transactional</option><option>Utility</option>
+          </select>
+        </div>
+      </div>
+      <div className="mb-4">
+        <label className="block text-xs text-muted mb-1">Message body</label>
+        <textarea value={form.body} onChange={e => setForm({ ...form, body: e.target.value })}
+          rows={3} className="crm-input w-full px-3 py-2 text-sm" placeholder="Use {{1}}, {{2}} for variables" />
+      </div>
+      <button
+        disabled={!form.name || !form.body || sending}
+        onClick={() => { setSending(true); setTimeout(() => { onRequest(form); onClose(); }, 500); }}
+        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
+      >
+        {sending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
+        {sending ? "Submitting…" : "Submit for review"}
+      </button>
+    </div>
+  );
+}
+
+function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
+  const [showRequest, setShowRequest] = useState(false);
   return (
     <div>
-      <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-      <div className="crm-perspective grid md:grid-cols-2 gap-3">
-        {templates.map(t => (
-          <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
-              {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : t.status === "rejected" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
-            </div>
-            <div className="bg-bg border border-default rounded-lg p-3 mt-3">
-              <p className="text-sm">{t.body}</p>
-            </div>
-            {t.status === "rejected" && <p className="text-xs text-danger mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Rejected by provider — edit and resubmit.</p>}
-          </TiltCard>
-        ))}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+        <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
+        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
+          <Plus size={15} /> Request template
+        </button>
       </div>
+
+      {showRequest && (
+        <RequestTemplatePanel
+          onClose={() => setShowRequest(false)}
+          onRequest={(f) => {
+            setTemplates(prev => [{ id: `T-1${5 + prev.length}`, name: f.name, category: f.category, status: "pending", body: f.body }, ...prev]);
+            notify(`"${f.name}" submitted for provider review`);
+          }}
+        />
+      )}
+
+      {templates.length === 0 ? (
+        <div className="crm-card p-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
+            <FileText size={20} />
+          </div>
+          <p className="font-medium mb-1">No templates yet</p>
+          <p className="text-sm text-muted mb-5">Request a template to start sending approved messages.</p>
+          <button onClick={() => setShowRequest(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <Plus size={15} /> Request template
+          </button>
+        </div>
+      ) : (
+        <div className="crm-perspective grid md:grid-cols-2 gap-3">
+          {templates.map(t => (
+            <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
+                {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : t.status === "rejected" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
+              </div>
+              <div className="bg-bg border border-default rounded-lg p-3 mt-3">
+                <p className="text-sm">{t.body}</p>
+              </div>
+              {t.status === "rejected" && <p className="text-xs text-danger mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Rejected by provider — edit and resubmit.</p>}
+            </TiltCard>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1529,7 +1651,10 @@ function Templates({ templates, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
-  const data = campaigns.filter(c => c.sent > 0).map(c => ({ name: c.id, delivered: c.delivered, read: c.read, failed: c.failed }));
+  const data = useMemo(
+    () => campaigns.filter(c => c.sent > 0).map(c => ({ name: c.id, delivered: c.delivered, read: c.read, failed: c.failed })),
+    [campaigns]
+  );
   return (
     <div>
       <PageHeader title="Reports" subtitle="Campaign performance and delivery outcomes." onMenuClick={onMenuClick} menuOpen={menuOpen} />
@@ -1537,40 +1662,70 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
         <p className="text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data}>
-            <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
-            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} />
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
+            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="crm-card overflow-x-auto crm-scrollbar">
-        <table className="w-full text-sm min-w-[600px] border-collapse">
-          <thead>
-            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-              <th className="px-4 py-3 font-medium">Campaign</th>
-              <th className="px-4 py-3 font-medium">Recipients</th>
-              <th className="px-4 py-3 font-medium">Delivery rate</th>
-              <th className="px-4 py-3 font-medium">Read rate</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-default">
+      {campaigns.length === 0 ? (
+        <div className="crm-card p-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
+            <BarChart3 size={20} />
+          </div>
+          <p className="font-medium mb-1">No report data yet</p>
+          <p className="text-sm text-muted">Reports will appear here once a campaign has been sent.</p>
+        </div>
+      ) : (
+        <>
+          {/* Card list — small screens */}
+          <div className="sm:hidden space-y-3">
             {campaigns.map(c => (
-              <tr key={c.id} className="hover:bg-surface-bright transition-colors">
-                <td className="px-4 py-3">{c.name}</td>
-                <td className="px-4 py-3 crm-mono text-xs">{c.recipients}</td>
-                <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</td>
-                <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</td>
-                <td className="px-4 py-3"><CampaignStatusBadge status={c.status} /></td>
-              </tr>
+              <div key={c.id} className="crm-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-medium truncate">{c.name}</p>
+                  <CampaignStatusBadge status={c.status} />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div><p className="text-muted">Recipients</p><p className="crm-mono">{c.recipients}</p></div>
+                  <div><p className="text-muted">Delivered</p><p className="crm-mono">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</p></div>
+                  <div><p className="text-muted">Read</p><p className="crm-mono">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</p></div>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          {/* Table — sm and up */}
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
+            <table className="w-full text-sm min-w-[600px] border-collapse">
+              <thead>
+                <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+                  <th className="px-4 py-3 font-medium">Campaign</th>
+                  <th className="px-4 py-3 font-medium">Recipients</th>
+                  <th className="px-4 py-3 font-medium">Delivery rate</th>
+                  <th className="px-4 py-3 font-medium">Read rate</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-default">
+                {campaigns.map(c => (
+                  <tr key={c.id} className="hover:bg-surface-bright transition-colors">
+                    <td className="px-4 py-3">{c.name}</td>
+                    <td className="px-4 py-3 crm-mono text-xs">{c.recipients}</td>
+                    <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</td>
+                    <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</td>
+                    <td className="px-4 py-3"><CampaignStatusBadge status={c.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1579,8 +1734,66 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
 /*  /admin                                                             */
 /* ------------------------------------------------------------------ */
 
-function Admin({ users, onMenuClick, menuOpen }) {
+function InviteUserPanel({ existingEmails, onClose, onInvite }) {
+  const [form, setForm] = useState({ name: "", email: "", role: "Sales / Support" });
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = () => {
+    const emailTaken = existingEmails.includes(form.email.trim().toLowerCase());
+    if (emailTaken) {
+      setError("A user with this email already exists.");
+      return;
+    }
+    setError("");
+    setSending(true);
+    setTimeout(() => { onInvite(form); onClose(); }, 500);
+  };
+
+  return (
+    <div className="crm-card p-5 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} /> Invite user</p>
+        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3 mb-2">
+        <div>
+          <label className="block text-xs text-muted mb-1">Full name</label>
+          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+            className="crm-input w-full px-3 py-2 text-sm" placeholder="e.g. Arjun Nair" />
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Work email</label>
+          <input value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setError(""); }}
+            className="crm-input w-full px-3 py-2 text-sm" placeholder="name@bharatinfotechs.com" />
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Role</label>
+          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+            className="crm-input w-full px-3 py-2 text-sm">
+            <option>Sales / Support</option>
+            <option>Administrator</option>
+          </select>
+        </div>
+      </div>
+      {error && (
+        <p className="text-xs text-danger mb-3 flex items-center gap-1.5"><AlertTriangle size={12} /> {error}</p>
+      )}
+      <button
+        disabled={!form.name || !form.email.includes("@") || sending}
+        onClick={handleSubmit}
+        className={`crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2 ${error ? "" : "mt-2"}`}
+      >
+        {sending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
+        {sending ? "Sending invite…" : "Send invite"}
+      </button>
+    </div>
+  );
+}
+
+function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
   const [masked, setMasked] = useState(true);
+  const [showInvite, setShowInvite] = useState(false);
   return (
     <div>
       <PageHeader title="Admin" subtitle="Users, WhatsApp account configuration, and access." onMenuClick={onMenuClick} menuOpen={menuOpen} />
@@ -1615,29 +1828,61 @@ function Admin({ users, onMenuClick, menuOpen }) {
           </ul>
         </div>
       </div>
-      <div className="crm-card overflow-x-auto crm-scrollbar">
+
+      {showInvite && (
+        <InviteUserPanel
+          existingEmails={users.map(u => u.email.toLowerCase())}
+          onClose={() => setShowInvite(false)}
+          onInvite={(f) => {
+            setUsers(prev => [...prev, { id: `U-0${4 + prev.length}`, name: f.name, role: f.role, email: f.email, status: "invited" }]);
+            notify(`Invite sent to ${f.email}`);
+          }}
+        />
+      )}
+
+      <div className="crm-card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright">
           <p className="text-sm font-semibold">Users</p>
-          <button className="flex items-center gap-1.5 text-xs text-primary font-medium"><Plus size={13} /> Invite user</button>
+          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium">
+            <Plus size={13} /> Invite user
+          </button>
         </div>
-        <table className="w-full text-sm min-w-[540px] border-collapse">
-          <thead>
-            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-              <th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">Email</th><th className="px-4 py-3 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-default">
-            {users.map(u => (
-              <tr key={u.id} className="hover:bg-surface-bright transition-colors">
-                <td className="px-4 py-3">{u.name}</td>
-                <td className="px-4 py-3 text-muted">{u.role}</td>
-                <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
-                <td className="px-4 py-3">{u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}</td>
+
+        {/* Card list — small screens */}
+        <div className="sm:hidden divide-y divide-default">
+          {users.map(u => (
+            <div key={u.id} className="p-4">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-medium">{u.name}</p>
+                {u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}
+              </div>
+              <p className="text-xs text-muted">{u.role}</p>
+              <p className="crm-mono text-xs text-muted mt-1">{u.email}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Table — sm and up */}
+        <div className="hidden sm:block overflow-x-auto crm-scrollbar">
+          <table className="w-full text-sm min-w-[540px] border-collapse">
+            <thead>
+              <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+                <th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Email</th><th className="px-4 py-3 font-medium">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-default">
+              {users.map(u => (
+                <tr key={u.id} className="hover:bg-surface-bright transition-colors">
+                  <td className="px-4 py-3">{u.name}</td>
+                  <td className="px-4 py-3 text-muted">{u.role}</td>
+                  <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
+                  <td className="px-4 py-3">{u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1648,103 +1893,40 @@ function Admin({ users, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
-  const [token, setToken] = useState(localStorage.getItem("crm_token") || null);
-  const [user, setUser] = useState(token ? { name: "Admin", role: "Administrator" } : null);
-  const [isLoading, setIsLoading] = useState(!!token);
+  const [user, setUser] = useState(null);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const [contacts, setContacts] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
-  const [templates, setTemplates] = useState(initialTemplates); // Keep mock templates for now
-  const [users, setUsers] = useState(initialUsers); // Keep mock users for now
+  const [contacts, setContacts] = useState(initialContacts);
+  const [campaigns, setCampaigns] = useState(initialCampaigns);
+  const [templates, setTemplates] = useState(initialTemplates);
+  const [users, setUsers] = useState(initialUsers);
   const [dark, setDark] = useState(false);
   const notify = (msg) => setToast(msg);
 
-  useEffect(() => {
-    if (!token) {
-      setUser(null);
-      return;
-    }
-    // We have a token, fetch real data
-    setIsLoading(true);
-    // Fake the user object for UI purposes since we don't have a /me endpoint
-    setUser({ name: "Admin", role: "Administrator" });
-    
-    Promise.all([
-      contactsService.getContacts().catch(() => ({ data: [] })),
-      campaignsService.getCampaigns().catch(() => ({ data: [] }))
-    ]).then(([resContacts, resCampaigns]) => {
-      // Map backend data to frontend expected shapes
-      setContacts(resContacts.data.map(c => ({
-        id: c.id,
-        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
-        phone: c.phone,
-        segment: 'All', // We don't track state segment in DB right now
-        district: 'None',
-        consent: c.consentStatus.toLowerCase(),
-        lastActivity: 'just now',
-      })));
-      setCampaigns(resCampaigns.data.map(c => ({
-        id: c.id,
-        name: c.name,
-        template: c.templateId, // Need actual name
-        status: c.status.toLowerCase(),
-        recipients: c.totalRecipients,
-        sent: c.sentCount,
-        delivered: c.deliveredCount,
-        read: c.readCount,
-        failed: c.failedCount,
-      })));
-      setIsLoading(false);
-    });
-  }, [token]);
-
-  const handleLogin = async (credentials) => {
-    try {
-      const res = await authService.login(credentials.email, credentials.password);
-      const access_token = res.data.accessToken;
-      localStorage.setItem("crm_token", access_token);
-      setUser({ name: res.data.user?.name || "Admin", role: "Administrator" });
-      setIsLoading(true);
-      setToken(access_token);
-    } catch (err) {
-      alert("Login failed: " + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("crm_token");
-    setToken(null);
-  };
-
-  if (!token || !user) {
+  if (!user) {
     return (
       <div className={`crm-root${dark ? " dark" : ""}`}>
         <Tokens />
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage onLogin={setUser} />
       </div>
     );
-  }
-
-  if (isLoading) {
-    return <div className="flex h-screen items-center justify-center">Loading Data...</div>;
   }
 
   const toggleMenu = () => setMobileOpen(o => !o);
   const pages = {
     dashboard: <Dashboard contacts={contacts} campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
-    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} templates={templates} />,
+    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
     campaigns: <Campaigns contacts={contacts} templates={templates} campaigns={campaigns} setCampaigns={setCampaigns} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
-    templates: <Templates templates={templates} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    templates: <Templates templates={templates} setTemplates={setTemplates} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
     reports: <Reports campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
-    admin: <Admin users={users} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    admin: <Admin users={users} setUsers={setUsers} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
   };
 
   return (
     <div className={`crm-root min-h-screen flex${dark ? " dark" : ""}`}>
       <Tokens />
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setUser(null)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
       <div className="flex-1 min-w-0 flex flex-col">
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-7 lg:p-8">
           {pages[active]}
