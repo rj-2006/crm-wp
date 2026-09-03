@@ -1,10 +1,8 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '../common/auth.guard';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { TagsService } from './tags.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { SegmentQueryDto } from './dto/segment-query.dto';
 
-@UseGuards(AuthGuard)
 @Controller('tags')
 export class TagsController {
   constructor(private s: TagsService) {}

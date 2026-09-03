@@ -1,0 +1,22 @@
+
+> api@0.0.1 test
+> jest
+
+PASS test/integration/campaigns.service.spec.ts
+PASS test/integration/auth.service.spec.ts
+PASS test/integration/campaign.processor.spec.ts
+PASS test/integration/contacts.service.spec.ts
+PASS test/integration/reports.service.spec.ts
+PASS test/integration/webhook.processor.spec.ts
+PASS test/integration/messages.service.spec.ts
+PASS test/integration/users.service.spec.ts
+PASS src/auth/auth.service.spec.ts
+PASS src/campaigns/campaigns.service.spec.ts
+PASS src/contacts/contacts.service.spec.ts
+PASS src/app.controller.spec.ts
+
+Test Suites: 12 passed, 12 total
+Tests:       34 passed, 34 total
+Snapshots:   0 total
+Time:        3.075 s
+Ran all test suites.

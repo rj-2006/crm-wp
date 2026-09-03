@@ -75,8 +75,21 @@ export class ContactsService {
   ) {
     const c = await this.db.contact.findFirst({ where: { id, companyId } });
     if (!c) throw new NotFoundException();
-    return this.db.consentLog.create({
-      data: { companyId, contactId: id, type: type.toLowerCase(), source },
+    
+    return this.db.$transaction(async (tx) => {
+      const action = type === CrmConsentStatus.OPTED_IN ? 'opt_in' : type === CrmConsentStatus.OPTED_OUT ? 'opt_out' : 'unknown';
+      const log = await tx.consentLog.create({
+        data: { companyId, contactId: id, type: action, source },
+      });
+      await tx.contact.update({
+        where: { id },
+        data: {
+          consentStatus: type,
+          consentSource: source,
+          consentUpdatedAt: new Date(),
+        },
+      });
+      return log;
     });
   }
   async addTag(companyId: string, id: string, tagId: string) {

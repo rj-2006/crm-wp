@@ -1,8 +1,8 @@
 import api from "./api";
 
 // 1:1 individual message send
-export const sendMessage = ({ contactId, templateId, variables }) =>
-  api.post(`/messages`, { contactId, templateId, variables });
+export const sendMessage = (payload) =>
+  api.post(`/messages`, payload);
 
 // Message history for a specific contact
 export const getContactMessages = (contactId) =>

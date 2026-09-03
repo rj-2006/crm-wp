@@ -1,10 +1,16 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard, Users, Send, FileText, BarChart3, Settings, LogOut,
   Search, Plus, Filter, Check, CheckCheck, X, ChevronRight, ChevronLeft,
-  HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus, Trash2,
-  Eye, EyeOff, Sparkles, Sun, Moon
+  HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus,
+  Eye, EyeOff, Sparkles, Sun, Moon, UploadCloud, MessageSquare, Tag
 } from "lucide-react";
+import * as authService from "./services/auth";
+import * as contactsService from "./services/contacts";
+import * as campaignsService from "./services/campaigns";
+import * as templatesService from "./services/templates";
+import * as messagesService from "./services/messages";
+import api from "./services/api";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -41,20 +47,7 @@ const Tokens = () => (
       color: var(--ink);
       background: var(--bg);
       -webkit-font-smoothing: antialiased;
-    }
-    /* Theme switch now crossfades via the native View Transitions API (see
-       the toggle's onClick): the browser snapshots the screen before and
-       after the state flip and blends the two images as one, instead of us
-       interpolating dozens of individual background/text colors by hand.
-       That sidesteps the whole class of bugs we kept hitting — different
-       properties finishing at different times, background and text landing
-       on the same mid-gray together and killing contrast for a frame, etc.
-       — because there's only ever one thing animating: opacity of two flat
-       snapshots. Falls back to an instant swap in browsers without support
-       (see the document.startViewTransition feature check). */
-    ::view-transition-old(root), ::view-transition-new(root) {
-      animation-duration: 180ms;
-      animation-timing-function: ease-out;
+      transition: background-color .2s ease, color .2s ease;
     }
     .crm-root.dark {
       --bg: #14161C;
@@ -74,6 +67,14 @@ const Tokens = () => (
       --warning-soft: #3A311F;
     }
     .crm-mono { font-family: 'Inter', monospace; font-variant-numeric: tabular-nums; }
+
+    /* Broad theme-switch transition: every surface fades between light/dark
+       together, not just the root. Placed before the more specific rules
+       below so their own transition lists (which fully replace this) can
+       extend it rather than silently losing it. */
+    .crm-root, .crm-root * {
+      transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease, fill 260ms ease, stroke 260ms ease;
+    }
 
     .bg-surface { background: var(--surface); }
     .bg-bg { background: var(--bg); }
@@ -102,7 +103,7 @@ const Tokens = () => (
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      transition: background-color 110ms ease-out, border-color 110ms ease-out, color 70ms ease-out 45ms, box-shadow .15s ease;
+      transition: background-color 260ms ease, border-color 150ms ease, color 260ms ease, box-shadow .15s ease;
     }
     .crm-input:focus {
       border-color: var(--primary);
@@ -113,7 +114,7 @@ const Tokens = () => (
       background: var(--primary);
       color: #fff;
       border-radius: 8px;
-      transition: background-color 110ms ease-out, opacity .15s ease, transform .12s ease, box-shadow .12s ease;
+      transition: background-color 260ms ease, opacity .15s ease, transform .12s ease, box-shadow .12s ease;
       box-shadow: 0 1px 2px rgba(91,141,239,0.15);
     }
     .crm-btn-primary:hover { opacity: 0.92; box-shadow: 0 4px 10px -3px rgba(91,141,239,0.35); }
@@ -125,7 +126,7 @@ const Tokens = () => (
       color: var(--ink);
       border: 1px solid var(--border);
       border-radius: 8px;
-      transition: background-color 110ms ease-out, border-color 110ms ease-out, color 70ms ease-out 45ms;
+      transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease;
     }
     .crm-btn-secondary:hover { background: var(--surface-bright); }
 
@@ -133,7 +134,7 @@ const Tokens = () => (
       background: var(--accent);
       color: #fff;
       border-radius: 8px;
-      transition: background-color 110ms ease-out, opacity .15s ease, box-shadow .12s ease;
+      transition: background-color 260ms ease, opacity .15s ease, box-shadow .12s ease;
       box-shadow: 0 1px 2px rgba(74,222,154,0.15);
     }
     .crm-btn-accent:hover { opacity: 0.9; box-shadow: 0 4px 10px -3px rgba(74,222,154,0.4); }
@@ -142,7 +143,7 @@ const Tokens = () => (
 
     .crm-nav-item {
       border-radius: 6px;
-      transition: background-color 110ms ease-out, color 70ms ease-out 45ms;
+      transition: background-color 260ms ease, color 260ms ease;
     }
     .crm-nav-item-active {
       background: var(--accent-soft);
@@ -181,26 +182,6 @@ const Tokens = () => (
     .crm-backdrop-out { animation: backdrop-out 180ms ease-in both; }
 
     @keyframes popin { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-    @keyframes success-pop {
-      0%   { opacity: 0; transform: scale(0.85); }
-      12%  { opacity: 1; transform: scale(1.04); }
-      20%  { transform: scale(1); }
-      82%  { opacity: 1; transform: scale(1); }
-      100% { opacity: 0; transform: scale(0.96); }
-    }
-    @keyframes success-ring {
-      0%   { opacity: 0; transform: scale(0.6); }
-      18%  { opacity: 1; transform: scale(1.35); }
-      45%  { opacity: 0.35; transform: scale(1.55); }
-      100% { opacity: 0; transform: scale(1.7); }
-    }
-    @keyframes success-check {
-      0%   { opacity: 0; transform: scale(0.4) rotate(-15deg); }
-      18%  { opacity: 1; transform: scale(1.12) rotate(0deg); }
-      28%  { transform: scale(1) rotate(0deg); }
-      100% { opacity: 1; transform: scale(1) rotate(0deg); }
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Hamburger <-> X morph. Three bars rotate/fade into an X on .crm-burger-open. */
     .crm-burger { width: 20px; height: 16px; position: relative; display: inline-block; }
@@ -382,87 +363,6 @@ function CampaignStatusBadge({ status }) {
   return <Badge tone="muted">Draft</Badge>;
 }
 
-function CenterSuccess({ mode = "add", message, onDone }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, 1400);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
-  const isAdd = mode === "add";
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}
-    >
-      <div
-        className="crm-card"
-        style={{
-          padding: "28px 36px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 12,
-          boxShadow: "0 20px 45px -12px rgba(0,0,0,0.25)",
-          animation: "success-pop 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
-        }}
-      >
-        <span style={{ position: "relative", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span
-            style={{
-              position: "absolute", inset: 0, borderRadius: "9999px",
-              background: isAdd ? "var(--accent-soft)" : "var(--danger-soft)",
-              animation: "success-ring 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
-            }}
-          />
-          <span
-            className="rounded-full flex items-center justify-center"
-            style={{
-              position: "relative", width: 44, height: 44, borderRadius: "9999px",
-              background: isAdd ? "var(--accent)" : "var(--danger)",
-              animation: "success-check 1400ms cubic-bezier(0.22, 1, 0.36, 1) both",
-            }}
-          >
-            {isAdd ? <Check size={22} color="#fff" strokeWidth={3} /> : <Trash2 size={19} color="#fff" strokeWidth={2.5} />}
-          </span>
-        </span>
-        <p className="text-sm font-medium text-ink whitespace-nowrap">{message}</p>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = false, loading = false, onConfirm, onCancel }) {
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-    >
-      <div onClick={onCancel} className="crm-backdrop-in" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} />
-      <div className="crm-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
-        <div className="flex items-start gap-3 mb-4">
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary"}`}>
-            <AlertTriangle size={17} />
-          </div>
-          <div>
-            <p className="font-semibold text-sm">{title}</p>
-            <p className="text-xs text-muted mt-1">{description}</p>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary px-3 py-2 text-sm font-medium disabled:opacity-40">Cancel</button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`px-3 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
-            style={danger ? { background: "var(--danger)" } : undefined}
-          >
-            {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
-            {loading ? "Please wait…" : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Toast({ message, onClose }) {
   React.useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
@@ -480,7 +380,6 @@ function PageHeader({ title, subtitle, onMenuClick, menuOpen }) {
         onClick={onMenuClick}
         aria-label={menuOpen ? "Close menu" : "Open menu"}
         aria-expanded={!!menuOpen}
-        className="lg:hidden"
         style={{ padding: 10, marginLeft: -10, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
       >
         <span className={`crm-burger ${menuOpen ? "crm-burger-open" : ""}`}>
@@ -577,11 +476,13 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
       <label className="block text-xs font-medium text-muted mb-1.5">Full Name</label>
       <input
         value={name} onChange={e => setName(e.target.value)}
+        placeholder="John Doe"
         className="crm-input w-full px-3 py-2.5 text-sm mb-4"
       />
-      <label className="block text-xs font-medium text-muted mb-1.5">Mail</label>
+      <label className="block text-xs font-medium text-muted mb-1.5">Work Email</label>
       <input
         value={email} onChange={e => setEmail(e.target.value)}
+        placeholder="john.doe@bharatinfotechs.com"
         className="crm-input w-full px-3 py-2.5 text-sm mb-4"
       />
       <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
@@ -589,6 +490,7 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
         <input
           type={showPw ? "text" : "password"}
           value={password} onChange={e => setPassword(e.target.value)}
+          placeholder="••••••••"
           className="crm-input w-full px-3 py-2.5 text-sm pr-10"
         />
         <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-2">
@@ -603,7 +505,7 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
         <button onClick={onForgot} className="text-xs font-medium hover:underline" style={{ color: accentColor }}>Forgot password?</button>
       </div>
       <button
-        onClick={() => onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role })}
+        onClick={() => onLogin({ email: email.trim(), password })}
         className={`${btnClass} w-full py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
       >
         Sign in as {role} <ArrowRight size={15} />
@@ -732,14 +634,7 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
         </div>
 
         <button
-          onClick={() => {
-            const flip = () => setDark(d => !d);
-            if (document.startViewTransition) {
-              document.startViewTransition(flip);
-            } else {
-              flip();
-            }
-          }}
+          onClick={() => setDark(d => !d)}
           role="switch"
           aria-checked={dark}
           style={{
@@ -797,7 +692,8 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
   );
 }
 
-function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
+function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
+  const items = ROUTES.filter(r => r.roles.includes(user.role));
   const navigate = (key) => { setActive(key); setMobileOpen(false); };
 
   // Stay mounted a beat past close so the exit animation can finish playing.
@@ -819,11 +715,11 @@ function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, s
     <>
       <div
         onClick={() => setMobileOpen(false)}
-        className={`lg:hidden ${closing ? "crm-backdrop-out" : "crm-backdrop-in"}`}
+        className={closing ? "crm-backdrop-out" : "crm-backdrop-in"}
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 30 }}
       />
       <aside
-        className={`lg:hidden bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
+        className={`bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
         style={{
           position: "fixed", top: 0, left: 0, height: "100vh", width: "min(288px, 85vw)",
           zIndex: 40, display: "flex", flexDirection: "column", padding: "24px 16px",
@@ -832,31 +728,6 @@ function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, s
       >
         <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} onCloseClick={() => setMobileOpen(false)} dark={dark} setDark={setDark} />
       </aside>
-    </>
-  );
-}
-
-function DesktopSidebar({ items, active, setActive, user, onLogout, dark, setDark }) {
-  const navigate = (key) => setActive(key);
-  return (
-    <aside
-      className="hidden lg:flex bg-surface border-r border-default crm-scrollbar"
-      style={{
-        width: 288, flexShrink: 0, height: "100vh", position: "sticky", top: 0,
-        flexDirection: "column", padding: "24px 16px", overflowY: "auto"
-      }}
-    >
-      <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} dark={dark} setDark={setDark} />
-    </aside>
-  );
-}
-
-function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
-  const items = ROUTES.filter(r => r.roles.includes(user.role));
-  return (
-    <>
-      <DesktopSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} dark={dark} setDark={setDark} />
-      <MobileSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
     </>
   );
 }
@@ -958,11 +829,18 @@ function KpiCard({ label, value, delta, tone = "accent", icon: Icon }) {
 
 function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
   const optedIn = contacts.filter(c => c.consent === "opted_in").length;
-  const active = campaigns.filter(c => c.status === "sending" || c.status === "queued").length;
+  const optedOut = contacts.filter(c => c.consent === "opted_out").length;
+  const pending = contacts.filter(c => c.consent !== "opted_in" && c.consent !== "opted_out").length;
+  const active = campaigns.filter(c => c.status === "sending" || c.status === "queued" || c.status === "running").length;
   const totalSent = campaigns.reduce((a, c) => a + c.sent, 0);
   const totalDelivered = campaigns.reduce((a, c) => a + c.delivered, 0);
   const rate = totalSent ? Math.round((totalDelivered / totalSent) * 100) : 0;
-  const totalConsent = consentSplit.reduce((a, c) => a + c.value, 0) || 1;
+  const dynamicConsentSplit = [
+    { name: "Opted in", key: "opted_in", value: optedIn },
+    { name: "Pending", key: "pending", value: pending },
+    { name: "Opted out", key: "opted_out", value: optedOut },
+  ];
+  const totalConsent = dynamicConsentSplit.reduce((a, c) => a + c.value, 0) || 1;
 
   return (
     <div>
@@ -980,12 +858,12 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           <p className="text-lg font-semibold mb-4">Delivery Performance</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={deliveryTrend}>
-              <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
-              <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
+              <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2">
@@ -994,12 +872,12 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           </div>
         </div>
 
-        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center">
+        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center justify-center">
           <p className="text-lg font-semibold w-full text-left mb-6">Consent Status</p>
           <div
-            className="relative w-40 h-40 rounded-full flex items-center justify-center my-auto"
-            style={{ background: `conic-gradient(${consentSplit.map((c, i) => {
-              const start = consentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
+            className="relative w-40 h-40 rounded-full flex items-center justify-center"
+            style={{ background: `conic-gradient(${dynamicConsentSplit.map((c, i) => {
+              const start = dynamicConsentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
               const end = start + (c.value / totalConsent * 100);
               return `${consentColors[c.key]} ${start}% ${end}%`;
             }).join(", ")})` }}
@@ -1010,7 +888,7 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
             </div>
           </div>
           <div className="w-full mt-6 space-y-2.5">
-            {consentSplit.map(c => (
+            {dynamicConsentSplit.map(c => (
               <div key={c.key} className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded" style={{ background: consentColors[c.key] }} />
@@ -1026,7 +904,6 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       <div className="crm-card overflow-hidden">
         <div className="p-4 border-b border-default flex justify-between items-center bg-surface-bright">
           <p className="text-lg font-semibold">Recent Campaigns</p>
-          <button className="text-xs font-medium text-primary hover:underline">View All</button>
         </div>
         <div className="overflow-x-auto crm-scrollbar">
           <table className="w-full text-sm min-w-[600px] border-collapse">
@@ -1065,9 +942,68 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
 /*  /contacts                                                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  SendMessageModal — 1:1 WhatsApp message to a single contact        */
+/* ------------------------------------------------------------------ */
+function SendMessageModal({ contact, templates, onClose, notify }) {
+  const approvedTemplates = (templates || []).filter(t => (t.approvalStatus || t.status || '').toUpperCase() === 'APPROVED');
+  const [templateId, setTemplateId] = useState(approvedTemplates[0]?.id || '');
+  const [sending, setSending] = useState(false);
+  const template = approvedTemplates.find(t => t.id === templateId);
+
+  const handleSend = async () => {
+    if (!templateId) return;
+    setSending(true);
+    try {
+      await messagesService.sendMessage({ contactId: contact.id, templateName: template.name });
+      notify(`Message queued for ${contact.name}`);
+      onClose();
+    } catch (err) {
+      alert('Failed to send: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+      <div className="crm-card w-full max-w-md p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <p className="font-semibold flex items-center gap-2"><MessageSquare size={16} className="text-primary" /> Send WhatsApp Message</p>
+          <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
+        </div>
+        <div className="mb-4 p-3 rounded-lg bg-surface-bright border border-default">
+          <p className="text-xs text-muted">To</p>
+          <p className="font-medium text-sm">{contact.name}</p>
+          <p className="text-xs text-muted crm-mono">{contact.phone}</p>
+        </div>
+        {approvedTemplates.length === 0 ? (
+          <p className="text-sm text-muted py-4 text-center">No approved templates available. Ask your admin to get a template approved first.</p>
+        ) : (
+          <>
+            <label className="block text-xs text-muted mb-1">Select Template</label>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto crm-scrollbar">
+              {approvedTemplates.map(t => (
+                <button key={t.id} onClick={() => setTemplateId(t.id)}
+                  className={`w-full text-left border rounded-lg px-3 py-2.5 text-sm transition-colors ${templateId === t.id ? 'border-primary bg-primary-soft' : 'border-default hover:border-muted-2'}`}>
+                  <p className="font-medium">{t.name}</p>
+                  {t.body && <p className="text-xs text-muted mt-0.5 line-clamp-2">{t.body}</p>}
+                </button>
+              ))}
+            </div>
+            <button onClick={handleSend} disabled={sending || !templateId}
+              className="crm-btn-primary w-full flex items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-40">
+              <Send size={14} /> {sending ? 'Sending...' : 'Send Message'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddContactPanel({ onClose, onAdd }) {
   const [form, setForm] = useState({ name: "", phone: "", segment: "Kerala", district: STATE_DISTRICTS["Kerala"][0], consent: "pending" });
-  const [saving, setSaving] = useState(false);
 
   const handleStateChange = (newState) => {
     // Reset district to the new state's first option whenever state changes,
@@ -1114,31 +1050,46 @@ function AddContactPanel({ onClose, onAdd }) {
           </select>
         </div>
       </div>
-      <button
-        disabled={!form.name || !form.phone || saving}
-        onClick={() => {
-          setSaving(true);
-          setTimeout(() => { onAdd(form); onClose(); }, 500);
-        }}
-        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
-      >
-        {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
-        {saving ? "Saving…" : "Save contact"}
+      <button disabled={!form.name || !form.phone} onClick={() => { onAdd(form); onClose(); }}
+        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40">
+        Save contact
       </button>
     </div>
   );
 }
 
-function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
+function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen, templates }) {
   const [query, setQuery] = useState("");
-  const [segmentFilter, setSegmentFilter] = useState("All");
+  const [tagFilter, setTagFilter] = useState("All");
   const [consentFilter, setConsentFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [centerSuccess, setCenterSuccess] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [sendTarget, setSendTarget] = useState(null); // contact to send 1:1 message to
+  const [availableTags, setAvailableTags] = useState([]);
   const filterRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleToggleConsent = async (contact, type) => {
+    try {
+      await contactsService.updateConsent(contact.id, type);
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: c.segment || 'All',
+        district: c.district || 'None',
+        consent: (c.consentStatus || 'unknown').toLowerCase(),
+        tags: c.tags?.map(t => t.tag.name) || [],
+        lastActivity: new Date(c.lastInboundAt || c.createdAt || Date.now()).toLocaleDateString()
+      })));
+      notify(`${contact.name} consent updated to ${type}`);
+    } catch (err) {
+      alert('Failed to update consent: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   useEffect(() => {
     if (!filterOpen) return;
     const onClickOutside = (e) => {
@@ -1148,7 +1099,72 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [filterOpen]);
 
-  const segments = ["All", ...INDIAN_STATES];
+  useEffect(() => {
+    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
+  }, []);
+
+  const handleAdd = async (form) => {
+    try {
+      const [firstName, ...lastNameParts] = form.name.split(' ');
+      const lastName = lastNameParts.join(' ');
+      const res = await contactsService.addContact({
+        firstName,
+        lastName,
+        phone: form.phone,
+        status: "ACTIVE",
+        source: "manual",
+        customFields: { segment: form.segment, district: form.district }
+      });
+      // Optionally update consent immediately if not pending
+      if (form.consent !== 'pending') {
+        // Need to add this method or assume backend handles it. For now let's just refresh.
+      }
+      
+      // Reload contacts
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: 'All',
+        district: 'None',
+        consent: c.consentStatus.toLowerCase(),
+        lastActivity: 'just now',
+      })));
+      notify(`${form.name} added to contacts`);
+    } catch (err) {
+      alert("Failed to add contact: " + err.message);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const res = await contactsService.importContacts(file);
+      notify(`Imported ${res.data.imported}, Merged ${res.data.merged}, Skipped ${res.data.skipped}`);
+      
+      // Reload contacts
+      const updated = await contactsService.getContacts();
+      setContacts(updated.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: 'All',
+        district: 'None',
+        consent: c.consentStatus.toLowerCase(),
+        lastActivity: 'just now',
+      })));
+    } catch (err) {
+      alert("Failed to import CSV: " + err.message);
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const tagOptions = ["All", ...availableTags.map(t => t.name)];
   const consentOptions = [
     { value: "All", label: "All" },
     { value: "opted_in", label: "Opted in" },
@@ -1156,7 +1172,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
     { value: "pending", label: "Pending" },
   ];
   const filtered = contacts.filter(c =>
-    (segmentFilter === "All" || c.segment === segmentFilter) &&
+    (tagFilter === "All" || (c.tags || []).includes(tagFilter)) &&
     (consentFilter === "All" || c.consent === consentFilter) &&
     (c.name.toLowerCase().includes(query.toLowerCase()) || c.phone.includes(query))
   );
@@ -1167,43 +1183,10 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Contacts Directory" subtitle="Manage and segment your WhatsApp customer base." onMenuClick={onMenuClick} menuOpen={menuOpen} />
         <div className="flex gap-2 shrink-0">
-          <div style={{ position: "relative" }} ref={filterRef}>
-            <button
-              onClick={() => setFilterOpen(o => !o)}
-              className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium"
-            >
-              <Filter size={15} /> Filter
-              {consentFilter !== "All" && (
-                <span style={{
-                  width: 16, height: 16, borderRadius: "50%", background: "var(--primary)", color: "#fff",
-                  fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center"
-                }}>1</span>
-              )}
-            </button>
-            {filterOpen && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 6px)", left: 0, width: 200, maxWidth: "calc(100vw - 32px)",
-                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-                boxShadow: "0 10px 30px -8px rgba(0,0,0,0.25)", padding: 10, zIndex: 50,
-                animation: "popin 160ms ease-out both"
-              }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.4, margin: "2px 4px 8px" }}>
-                  Consent status
-                </p>
-                {consentOptions.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { setConsentFilter(opt.value); setFilterOpen(false); }}
-                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
-                    style={consentFilter === opt.value ? { color: "var(--primary)", fontWeight: 600, background: "var(--primary-soft)" } : undefined}
-                  >
-                    {opt.label}
-                    {consentFilter === opt.value && <Check size={14} />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleImport} />
+          <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <UploadCloud size={15} /> {isImporting ? "Importing..." : "Import CSV"}
+          </button>
           <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium">
             <UserPlus size={15} /> Add contact
           </button>
@@ -1219,13 +1202,24 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           <span className="w-2 h-2 rounded-full bg-primary" />
           <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
         </div>
-        <div className="crm-card flex-1 flex items-center overflow-x-auto crm-scrollbar">
-          {segments.map(s => (
-            <button key={s} onClick={() => setSegmentFilter(s)}
-              className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
-              {s}
-            </button>
-          ))}
+        <div className="crm-card flex-1 flex items-center px-3 py-2">
+          <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Consent</label>
+          <select
+            value={consentFilter}
+            onChange={e => setConsentFilter(e.target.value)}
+            className="crm-input flex-1 px-3 py-2 text-sm mr-4"
+          >
+            {consentOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+          <Tag size={13} className="text-muted mr-2 shrink-0" />
+          <label className="text-[10px] text-muted uppercase tracking-wide whitespace-nowrap mr-3">Tag</label>
+          <select
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+            className="crm-input flex-1 px-3 py-2 text-sm"
+          >
+            {tagOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
       </div>
 
@@ -1237,128 +1231,91 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 
       {showAdd && (
         <AddContactPanel onClose={() => setShowAdd(false)} onAdd={(f) => {
-          setContacts(prev => [{ id: `C-0${240 + prev.length}`, name: f.name, phone: f.phone, segment: f.segment, district: f.district, consent: f.consent, lastActivity: "just now" }, ...prev]);
-          notify(`${f.name} added to contacts`);
-          setCenterSuccess({ mode: "add", message: `${f.name} added` });
+          handleAdd(f);
+          setShowAdd(false);
         }} />
       )}
 
-      {contacts.length === 0 ? (
-        <div className="crm-card p-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
-            <Users size={20} />
-          </div>
-          <p className="font-medium mb-1">No contacts yet</p>
-          <p className="text-sm text-muted mb-5">Add your first contact to start building your WhatsApp audience.</p>
-          <button onClick={() => setShowAdd(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <UserPlus size={15} /> Add contact
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Card list — small screens */}
-          <div className="sm:hidden space-y-3">
+      <div className="crm-card overflow-x-auto crm-scrollbar">
+        <table className="w-full text-sm min-w-[620px] border-collapse">
+          <thead>
+            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Phone</th>
+              <th className="px-4 py-3 font-medium">Tags</th>
+              <th className="px-4 py-3 font-medium">Consent</th>
+              <th className="px-4 py-3 font-medium">Last Activity</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-default">
             {filtered.map(c => (
-              <div key={c.id} className="crm-card p-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-9 h-9 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+              <tr key={c.id} className="hover:bg-surface-bright transition-colors group">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
                       {c.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
                     </span>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{c.name}</p>
-                      <p className="crm-mono text-xs text-muted truncate">{c.phone}</p>
-                    </div>
+                    <span className="font-medium">{c.name}</span>
                   </div>
-                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-1" aria-label={`Remove ${c.name}`}>
-                    <X size={16} />
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted mb-2">
-                  <Badge tone="muted">{c.segment}</Badge>
-                  <span>{c.district || "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <ConsentBadge consent={c.consent} />
-                  <span className="text-muted text-xs">{c.lastActivity}</span>
-                </div>
-              </div>
+                </td>
+                <td className="px-4 py-3 crm-mono text-xs text-muted">{c.phone}</td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(c.tags || []).length > 0
+                      ? c.tags.map(tag => (
+                          <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary-soft text-primary border border-primary/20">
+                            <Tag size={9} />{tag}
+                          </span>
+                        ))
+                      : <span className="text-muted-2 text-xs">—</span>
+                    }
+                  </div>
+                </td>
+                <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
+                <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleConsent(c, 'OPTED_IN')}
+                      disabled={c.consent === 'opted_in'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-[10px] text-green-600 font-medium border border-green-600/30 hover:border-green-600 rounded px-1.5 py-0.5 disabled:opacity-0"
+                    >
+                      Opt In
+                    </button>
+                    <button
+                      onClick={() => handleToggleConsent(c, 'OPTED_OUT')}
+                      disabled={c.consent === 'opted_out'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-[10px] text-red-600 font-medium border border-red-600/30 hover:border-red-600 rounded px-1.5 py-0.5 disabled:opacity-0"
+                    >
+                      Opt Out
+                    </button>
+                    <button
+                      onClick={() => setSendTarget(c)}
+                      disabled={c.consent === 'opted_out'}
+                      title={c.consent === 'opted_out' ? 'Contact has opted out' : 'Send WhatsApp message'}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs text-primary hover:text-primary font-medium border border-primary/30 hover:border-primary rounded-lg px-2.5 py-1.5 disabled:opacity-30 disabled:cursor-not-allowed bg-primary-soft ml-auto"
+                    >
+                      <MessageSquare size={12} /> Send
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ))}
-            {filtered.length === 0 && (
-              <div className="crm-card px-4 py-8 text-center text-muted text-sm">No contacts match this search.</div>
-            )}
-          </div>
-
-          {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
-            <table className="w-full text-sm min-w-[660px] border-collapse">
-              <thead>
-                <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Phone</th>
-                  <th className="px-4 py-3 font-medium">State</th>
-                  <th className="px-4 py-3 font-medium">District</th>
-                  <th className="px-4 py-3 font-medium">Consent Status</th>
-                  <th className="px-4 py-3 font-medium">Last Activity</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {filtered.map(c => (
-                  <tr key={c.id} className="hover:bg-surface-bright transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
-                          {c.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
-                        </span>
-                        <span className="font-medium">{c.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 crm-mono text-xs text-muted">{c.phone}</td>
-                    <td className="px-4 py-3"><Badge tone="muted">{c.segment}</Badge></td>
-                    <td className="px-4 py-3 text-sm text-muted">{c.district || "—"}</td>
-                    <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
-                    <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-1" aria-label={`Remove ${c.name}`}>
-                        <X size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted text-sm">No contacts match this search.</td></tr>}
-              </tbody>
-            </table>
-            <div className="flex items-center justify-between px-4 py-3 border-t border-default text-xs text-muted">
-              <span>Showing 1-{filtered.length} of {contacts.length.toLocaleString()} contacts</span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {pendingDelete && (
-        <ConfirmDialog
-          title="Remove this contact?"
-          description={`${pendingDelete.name} will be removed from your contact list. This can't be undone.`}
-          confirmLabel="Remove contact"
-          danger
-          loading={deleting}
-          onCancel={() => !deleting && setPendingDelete(null)}
-          onConfirm={() => {
-            setDeleting(true);
-            setTimeout(() => {
-              setContacts(prev => prev.filter(c => c.id !== pendingDelete.id));
-              notify(`${pendingDelete.name} removed`);
-              setCenterSuccess({ mode: "remove", message: `${pendingDelete.name} removed` });
-              setDeleting(false);
-              setPendingDelete(null);
-            }, 500);
-          }}
+            {filtered.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted text-sm">No contacts match this search.</td></tr>}
+          </tbody>
+        </table>
+        <div className="flex items-center justify-between px-4 py-3 border-t border-default text-xs text-muted">
+          <span>Showing 1-{filtered.length} of {contacts.length.toLocaleString()} contacts</span>
+        </div>
+      </div>
+      {sendTarget && (
+        <SendMessageModal
+          contact={sendTarget}
+          templates={templates || []}
+          onClose={() => setSendTarget(null)}
+          notify={notify}
         />
-      )}
-
-      {centerSuccess && (
-        <CenterSuccess mode={centerSuccess.mode} message={centerSuccess.message} onDone={() => setCenterSuccess(null)} />
       )}
     </div>
   );
@@ -1370,15 +1327,24 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 
 function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
   const [step, setStep] = useState(1);
-  const [launching, setLaunching] = useState(false);
   const [name, setName] = useState("");
-  const [segment, setSegment] = useState("Ernakulam");
-  const [templateId, setTemplateId] = useState(templates.find(t => t.status === "approved")?.id || "");
-  const segments = INDIAN_STATES;
-  const eligible = contacts.filter(c => c.segment === segment && c.consent === "opted_in");
-  const excluded = contacts.filter(c => c.segment === segment && c.consent !== "opted_in").length;
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [templateId, setTemplateId] = useState(templates.find(t => (t.approvalStatus || t.status || '').toUpperCase() === "APPROVED")?.id || "");
+  const [availableTags, setAvailableTags] = useState([]);
+  const eligible = contacts.filter(c =>
+    c.consent === "opted_in" &&
+    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
+  );
+  const excluded = contacts.filter(c =>
+    c.consent !== "opted_in" &&
+    (selectedTags.length === 0 || selectedTags.every(tag => (c.tags || []).includes(tag)))
+  ).length;
   const template = templates.find(t => t.id === templateId);
-  const steps = ["State", "Template", "Preview", "Launch"];
+  const steps = ["Audience", "Template", "Preview", "Launch"];
+
+  useEffect(() => {
+    messagesService.getTags().then(r => setAvailableTags(r.data || [])).catch(() => {});
+  }, []);
 
   return (
     <div className="crm-card p-5 mb-6">
@@ -1396,7 +1362,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               </span>
               {s}
             </div>
-            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "var(--border)" }} />}
+            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "#EEF0F3" }} />}
           </React.Fragment>
         ))}
       </div>
@@ -1406,11 +1372,29 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
           <label className="block text-xs text-muted mb-1">Campaign name</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Seasonal Collection Launch"
             className="crm-input w-full px-3 py-2 text-sm mb-4" />
-          <label className="block text-xs text-muted mb-1">State</label>
-          <select value={segment} onChange={e => setSegment(e.target.value)} className="crm-input w-full px-3 py-2 text-sm mb-2">
-            {segments.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <p className="text-xs text-muted">{eligible.length} contacts eligible (opted in). {excluded > 0 && `${excluded} excluded — no consent on record.`}</p>
+          <label className="block text-xs text-muted mb-2">Target audience — filter by tags</label>
+          {availableTags.length === 0 ? (
+            <p className="text-xs text-muted mb-3 p-3 rounded-lg bg-surface-bright border border-default">No tags created yet. All opted-in contacts will be targeted.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {availableTags.map(tag => (
+                <button key={tag.id}
+                  onClick={() => setSelectedTags(prev => prev.includes(tag.name) ? prev.filter(t => t !== tag.name) : [...prev, tag.name])}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    selectedTags.includes(tag.name)
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-surface-bright border-default text-ink hover:border-muted-2'
+                  }`}>
+                  <Tag size={10} /> {tag.name}
+                  {selectedTags.includes(tag.name) && <Check size={10} />}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted">
+            {selectedTags.length === 0 ? 'All opted-in contacts' : `Contacts tagged: ${selectedTags.join(', ')}`} — <strong>{eligible.length}</strong> eligible.
+            {excluded > 0 && ` ${excluded} excluded — no consent on record.`}
+          </p>
         </div>
       )}
 
@@ -1421,7 +1405,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               className={`w-full text-left border rounded-lg px-3 py-2.5 flex items-center justify-between text-sm transition-colors
                 ${templateId === t.id ? "border-primary bg-primary-soft" : "border-default"} ${t.status !== "approved" ? "opacity-40 cursor-not-allowed" : "hover:border-muted-2"}`}>
               <div><p className="font-medium">{t.name}</p><p className="text-xs text-muted">{t.category}</p></div>
-              {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : <Badge tone="warning">Pending review</Badge>}
+              {(t.approvalStatus || t.status || '').toUpperCase() === "APPROVED" ? <Badge tone="accent">Approved</Badge> : <Badge tone="warning">Pending review</Badge>}
             </button>
           ))}
           <p className="text-xs text-muted pt-1">Only provider-approved templates can be used for a bulk send.</p>
@@ -1440,7 +1424,8 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
               <p className="text-xs text-muted">Recipients</p><p className="font-medium">{eligible.length} contacts</p>
             </div>
             <div className="border border-default rounded-lg px-3 py-2">
-              <p className="text-xs text-muted">State</p><p className="font-medium">{segment}</p>
+              <p className="text-xs text-muted">Tags</p>
+              <p className="font-medium">{selectedTags.length === 0 ? 'All opted-in' : selectedTags.join(', ')}</p>
             </div>
           </div>
         </div>
@@ -1465,19 +1450,9 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
             Continue <ChevronRight size={15} />
           </button>
         ) : (
-          <button
-            disabled={launching}
-            onClick={() => {
-              setLaunching(true);
-              setTimeout(() => {
-                onLaunch({ name: name || "Untitled campaign", segment, template: template.name, recipients: eligible.length });
-              }, 600);
-            }}
-            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
-          >
-            {launching
-              ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} /> Launching…</>
-              : <><Send size={14} /> Launch campaign</>}
+          <button onClick={() => onLaunch({ name: name || "Untitled campaign", tags: selectedTags, template: template?.name, templateId, recipients: eligible.length })}
+            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm">
+            <Send size={14} /> Launch campaign
           </button>
         )}
       </div>
@@ -1497,55 +1472,61 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
       </div>
       {showWizard && (
         <NewCampaignWizard contacts={contacts} templates={templates} onClose={() => setShowWizard(false)}
-          onLaunch={(payload) => {
-            setCampaigns(prev => [{ id: `CMP-0${17 + prev.length}`, name: payload.name, template: payload.template, segment: payload.segment, status: "queued", recipients: payload.recipients, sent: 0, delivered: 0, read: 0, failed: 0 }, ...prev]);
-            notify(`"${payload.name}" queued for ${payload.recipients} recipients`);
+          onLaunch={async (payload) => {
+            try {
+              // Get companyId from localStorage user data
+              const storedUser = JSON.parse(localStorage.getItem("crm_user") || '{}');
+              const companyId = storedUser.companyId || "54bfead7-d6fd-4fd4-a306-caefd49068f5";
+              
+              // Fetch whatsapp accounts to get a valid ID
+              const accountsRes = await api.get("/whatsapp/accounts").catch(() => ({ data: [] }));
+              const defaultAccountId = accountsRes.data[0]?.id || "3ede6bff-f7e6-4f00-89e5-925d3f557178";
+
+              const res = await campaignsService.createCampaign(companyId, {
+                name: payload.name || "Untitled campaign",
+                templateId: payload.templateId,
+                whatsappAccountId: defaultAccountId,
+                segmentFilter: { tagId: payload.tags[0] },
+              });
+              const c = res.data;
+              setCampaigns(prev => [{ id: c.id, name: c.name, template: payload.template, segment: payload.segment || "All", status: (c.status || 'draft').toLowerCase(), recipients: c.totalRecipients || payload.recipients || 0, sent: 0, delivered: 0, read: 0, failed: 0 }, ...prev]);
+              notify(`"${payload.name}" created with ${payload.recipients} recipients`);
+            } catch (err) {
+              notify(`Failed to create campaign: ${err.response?.data?.message || err.message}`);
+            }
             setShowWizard(false);
           }} />
       )}
-      {campaigns.length === 0 ? (
-        <div className="crm-card p-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-accent-soft text-accent flex items-center justify-center mx-auto mb-3">
-            <Send size={20} />
-          </div>
-          <p className="font-medium mb-1">No campaigns yet</p>
-          <p className="text-sm text-muted mb-5">Create your first campaign to start sending to opted-in contacts.</p>
-          <button onClick={() => setShowWizard(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <Plus size={15} /> New campaign
-          </button>
-        </div>
-      ) : (
-        <div className="crm-perspective grid gap-3">
-          {campaigns.map(c => {
-            const pct = c.recipients ? Math.round((c.sent / c.recipients) * 100) : 0;
-            return (
-              <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="crm-mono text-xs text-muted">{c.id}</span>
-                      <CampaignStatusBadge status={c.status} />
-                    </div>
-                    <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
+      <div className="crm-perspective grid gap-3">
+        {campaigns.map(c => {
+          const pct = c.recipients ? Math.round((c.sent / c.recipients) * 100) : 0;
+          return (
+            <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="crm-mono text-xs text-muted">{c.id}</span>
+                    <CampaignStatusBadge status={c.status} />
                   </div>
-                  <div className="flex gap-4 text-xs">
-                    <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
-                    <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
-                    <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
-                    <div className="text-center"><p className="text-muted">Failed</p><p className="crm-mono text-danger">{c.failed}</p></div>
-                  </div>
+                  <p className="font-medium">{c.name}</p>
+                  <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
                 </div>
-                {c.status !== "draft" && (
-                  <div className="mt-3 h-1.5 bg-bg rounded-full overflow-hidden">
-                    <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
-                  </div>
-                )}
-              </TiltCard>
-            );
-          })}
-        </div>
-      )}
+                <div className="flex gap-4 text-xs">
+                  <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
+                  <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
+                  <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
+                  <div className="text-center"><p className="text-muted">Failed</p><p className="crm-mono text-danger">{c.failed}</p></div>
+                </div>
+              </div>
+              {c.status !== "draft" && (
+                <div className="mt-3 h-1.5 bg-bg rounded-full overflow-hidden">
+                  <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+                </div>
+              )}
+            </TiltCard>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1554,94 +1535,24 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
 /*  /templates                                                         */
 /* ------------------------------------------------------------------ */
 
-function RequestTemplatePanel({ onClose, onRequest }) {
-  const [form, setForm] = useState({ name: "", category: "Marketing", body: "" });
-  const [sending, setSending] = useState(false);
-  return (
-    <div className="crm-card p-5 mb-4">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold flex items-center gap-2"><FileText size={15} /> Request new template</p>
-        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
-      </div>
-      <div className="grid sm:grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="block text-xs text-muted mb-1">Template name</label>
-          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-            className="crm-input w-full px-3 py-2 text-sm" placeholder="e.g. Delivery Update" />
-        </div>
-        <div>
-          <label className="block text-xs text-muted mb-1">Category</label>
-          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-            className="crm-input w-full px-3 py-2 text-sm">
-            <option>Marketing</option><option>Transactional</option><option>Utility</option>
-          </select>
-        </div>
-      </div>
-      <div className="mb-4">
-        <label className="block text-xs text-muted mb-1">Message body</label>
-        <textarea value={form.body} onChange={e => setForm({ ...form, body: e.target.value })}
-          rows={3} className="crm-input w-full px-3 py-2 text-sm" placeholder="Use {{1}}, {{2}} for variables" />
-      </div>
-      <button
-        disabled={!form.name || !form.body || sending}
-        onClick={() => { setSending(true); setTimeout(() => { onRequest(form); onClose(); }, 500); }}
-        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
-      >
-        {sending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
-        {sending ? "Submitting…" : "Submit for review"}
-      </button>
-    </div>
-  );
-}
-
-function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
-  const [showRequest, setShowRequest] = useState(false);
+function Templates({ templates, onMenuClick, menuOpen }) {
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
-        <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
-          <Plus size={15} /> Request template
-        </button>
+      <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
+      <div className="crm-perspective grid md:grid-cols-2 gap-3">
+        {templates.map(t => (
+          <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
+            <div className="flex items-start justify-between mb-2">
+              <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
+              {(t.approvalStatus || t.status || '').toUpperCase() === "APPROVED" ? <Badge tone="accent">Approved</Badge> : (t.approvalStatus || t.status || '').toUpperCase() === "REJECTED" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
+            </div>
+            <div className="bg-bg border border-default rounded-lg p-3 mt-3">
+              <p className="text-sm">{t.body}</p>
+            </div>
+            {t.status === "rejected" && <p className="text-xs text-danger mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Rejected by provider — edit and resubmit.</p>}
+          </TiltCard>
+        ))}
       </div>
-
-      {showRequest && (
-        <RequestTemplatePanel
-          onClose={() => setShowRequest(false)}
-          onRequest={(f) => {
-            setTemplates(prev => [{ id: `T-1${5 + prev.length}`, name: f.name, category: f.category, status: "pending", body: f.body }, ...prev]);
-            notify(`"${f.name}" submitted for provider review`);
-          }}
-        />
-      )}
-
-      {templates.length === 0 ? (
-        <div className="crm-card p-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
-            <FileText size={20} />
-          </div>
-          <p className="font-medium mb-1">No templates yet</p>
-          <p className="text-sm text-muted mb-5">Request a template to start sending approved messages.</p>
-          <button onClick={() => setShowRequest(true)} className="crm-btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <Plus size={15} /> Request template
-          </button>
-        </div>
-      ) : (
-        <div className="crm-perspective grid md:grid-cols-2 gap-3">
-          {templates.map(t => (
-            <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
-                {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : t.status === "rejected" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
-              </div>
-              <div className="bg-bg border border-default rounded-lg p-3 mt-3">
-                <p className="text-sm">{t.body}</p>
-              </div>
-              {t.status === "rejected" && <p className="text-xs text-danger mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Rejected by provider — edit and resubmit.</p>}
-            </TiltCard>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1651,10 +1562,7 @@ function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
-  const data = useMemo(
-    () => campaigns.filter(c => c.sent > 0).map(c => ({ name: c.id, delivered: c.delivered, read: c.read, failed: c.failed })),
-    [campaigns]
-  );
+  const data = campaigns.filter(c => c.sent > 0).map(c => ({ name: c.id, delivered: c.delivered, read: c.read, failed: c.failed }));
   return (
     <div>
       <PageHeader title="Reports" subtitle="Campaign performance and delivery outcomes." onMenuClick={onMenuClick} menuOpen={menuOpen} />
@@ -1662,70 +1570,40 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
         <p className="text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data}>
-            <CartesianGrid stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
-            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
+            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {campaigns.length === 0 ? (
-        <div className="crm-card p-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center mx-auto mb-3">
-            <BarChart3 size={20} />
-          </div>
-          <p className="font-medium mb-1">No report data yet</p>
-          <p className="text-sm text-muted">Reports will appear here once a campaign has been sent.</p>
-        </div>
-      ) : (
-        <>
-          {/* Card list — small screens */}
-          <div className="sm:hidden space-y-3">
+      <div className="crm-card overflow-x-auto crm-scrollbar">
+        <table className="w-full text-sm min-w-[600px] border-collapse">
+          <thead>
+            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+              <th className="px-4 py-3 font-medium">Campaign</th>
+              <th className="px-4 py-3 font-medium">Recipients</th>
+              <th className="px-4 py-3 font-medium">Delivery rate</th>
+              <th className="px-4 py-3 font-medium">Read rate</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-default">
             {campaigns.map(c => (
-              <div key={c.id} className="crm-card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-medium truncate">{c.name}</p>
-                  <CampaignStatusBadge status={c.status} />
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div><p className="text-muted">Recipients</p><p className="crm-mono">{c.recipients}</p></div>
-                  <div><p className="text-muted">Delivered</p><p className="crm-mono">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</p></div>
-                  <div><p className="text-muted">Read</p><p className="crm-mono">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</p></div>
-                </div>
-              </div>
+              <tr key={c.id} className="hover:bg-surface-bright transition-colors">
+                <td className="px-4 py-3">{c.name}</td>
+                <td className="px-4 py-3 crm-mono text-xs">{c.recipients}</td>
+                <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</td>
+                <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</td>
+                <td className="px-4 py-3"><CampaignStatusBadge status={c.status} /></td>
+              </tr>
             ))}
-          </div>
-
-          {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
-            <table className="w-full text-sm min-w-[600px] border-collapse">
-              <thead>
-                <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-                  <th className="px-4 py-3 font-medium">Campaign</th>
-                  <th className="px-4 py-3 font-medium">Recipients</th>
-                  <th className="px-4 py-3 font-medium">Delivery rate</th>
-                  <th className="px-4 py-3 font-medium">Read rate</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {campaigns.map(c => (
-                  <tr key={c.id} className="hover:bg-surface-bright transition-colors">
-                    <td className="px-4 py-3">{c.name}</td>
-                    <td className="px-4 py-3 crm-mono text-xs">{c.recipients}</td>
-                    <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.delivered / c.sent) * 100) : 0}%</td>
-                    <td className="px-4 py-3 crm-mono text-xs">{c.sent ? Math.round((c.read / c.sent) * 100) : 0}%</td>
-                    <td className="px-4 py-3"><CampaignStatusBadge status={c.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1734,66 +1612,8 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
 /*  /admin                                                             */
 /* ------------------------------------------------------------------ */
 
-function InviteUserPanel({ existingEmails, onClose, onInvite }) {
-  const [form, setForm] = useState({ name: "", email: "", role: "Sales / Support" });
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = () => {
-    const emailTaken = existingEmails.includes(form.email.trim().toLowerCase());
-    if (emailTaken) {
-      setError("A user with this email already exists.");
-      return;
-    }
-    setError("");
-    setSending(true);
-    setTimeout(() => { onInvite(form); onClose(); }, 500);
-  };
-
-  return (
-    <div className="crm-card p-5 mb-4">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} /> Invite user</p>
-        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
-      </div>
-      <div className="grid sm:grid-cols-2 gap-3 mb-2">
-        <div>
-          <label className="block text-xs text-muted mb-1">Full name</label>
-          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-            className="crm-input w-full px-3 py-2 text-sm" placeholder="e.g. Arjun Nair" />
-        </div>
-        <div>
-          <label className="block text-xs text-muted mb-1">Work email</label>
-          <input value={form.email} onChange={e => { setForm({ ...form, email: e.target.value }); setError(""); }}
-            className="crm-input w-full px-3 py-2 text-sm" placeholder="name@bharatinfotechs.com" />
-        </div>
-        <div>
-          <label className="block text-xs text-muted mb-1">Role</label>
-          <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-            className="crm-input w-full px-3 py-2 text-sm">
-            <option>Sales / Support</option>
-            <option>Administrator</option>
-          </select>
-        </div>
-      </div>
-      {error && (
-        <p className="text-xs text-danger mb-3 flex items-center gap-1.5"><AlertTriangle size={12} /> {error}</p>
-      )}
-      <button
-        disabled={!form.name || !form.email.includes("@") || sending}
-        onClick={handleSubmit}
-        className={`crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2 ${error ? "" : "mt-2"}`}
-      >
-        {sending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
-        {sending ? "Sending invite…" : "Send invite"}
-      </button>
-    </div>
-  );
-}
-
-function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
+function Admin({ users, onMenuClick, menuOpen }) {
   const [masked, setMasked] = useState(true);
-  const [showInvite, setShowInvite] = useState(false);
   return (
     <div>
       <PageHeader title="Admin" subtitle="Users, WhatsApp account configuration, and access." onMenuClick={onMenuClick} menuOpen={menuOpen} />
@@ -1828,61 +1648,29 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
           </ul>
         </div>
       </div>
-
-      {showInvite && (
-        <InviteUserPanel
-          existingEmails={users.map(u => u.email.toLowerCase())}
-          onClose={() => setShowInvite(false)}
-          onInvite={(f) => {
-            setUsers(prev => [...prev, { id: `U-0${4 + prev.length}`, name: f.name, role: f.role, email: f.email, status: "invited" }]);
-            notify(`Invite sent to ${f.email}`);
-          }}
-        />
-      )}
-
-      <div className="crm-card overflow-hidden">
+      <div className="crm-card overflow-x-auto crm-scrollbar">
         <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright">
           <p className="text-sm font-semibold">Users</p>
-          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium">
-            <Plus size={13} /> Invite user
-          </button>
+          <button className="flex items-center gap-1.5 text-xs text-primary font-medium"><Plus size={13} /> Invite user</button>
         </div>
-
-        {/* Card list — small screens */}
-        <div className="sm:hidden divide-y divide-default">
-          {users.map(u => (
-            <div key={u.id} className="p-4">
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-medium">{u.name}</p>
-                {u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}
-              </div>
-              <p className="text-xs text-muted">{u.role}</p>
-              <p className="crm-mono text-xs text-muted mt-1">{u.email}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Table — sm and up */}
-        <div className="hidden sm:block overflow-x-auto crm-scrollbar">
-          <table className="w-full text-sm min-w-[540px] border-collapse">
-            <thead>
-              <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
-                <th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Email</th><th className="px-4 py-3 font-medium">Status</th>
+        <table className="w-full text-sm min-w-[540px] border-collapse">
+          <thead>
+            <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
+              <th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Role</th>
+              <th className="px-4 py-3 font-medium">Email</th><th className="px-4 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-default">
+            {users.map(u => (
+              <tr key={u.id} className="hover:bg-surface-bright transition-colors">
+                <td className="px-4 py-3">{u.name}</td>
+                <td className="px-4 py-3 text-muted">{u.role}</td>
+                <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
+                <td className="px-4 py-3"><Badge tone="accent">Active</Badge></td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-default">
-              {users.map(u => (
-                <tr key={u.id} className="hover:bg-surface-bright transition-colors">
-                  <td className="px-4 py-3">{u.name}</td>
-                  <td className="px-4 py-3 text-muted">{u.role}</td>
-                  <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
-                  <td className="px-4 py-3">{u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1893,40 +1681,131 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("crm_session_active") || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("crm_user");
+      return stored ? JSON.parse(stored) : (token ? { name: "Admin", role: "Administrator", companyId: "54bfead7-d6fd-4fd4-a306-caefd49068f5" } : null);
+    } catch {
+      return token ? { name: "Admin", role: "Administrator", companyId: "54bfead7-d6fd-4fd4-a306-caefd49068f5" } : null;
+    }
+  });
+  const [isLoading, setIsLoading] = useState(!!token);
   const [active, setActive] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const [contacts, setContacts] = useState(initialContacts);
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
-  const [templates, setTemplates] = useState(initialTemplates);
-  const [users, setUsers] = useState(initialUsers);
+  
+  const [contacts, setContacts] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [templates, setTemplates] = useState([]); 
+  const [users, setUsers] = useState([]); 
   const [dark, setDark] = useState(false);
+  
   const notify = (msg) => setToast(msg);
 
-  if (!user) {
+  useEffect(() => {
+    if (!token) return;
+    setIsLoading(true);
+
+    const compId = user?.companyId || "54bfead7-d6fd-4fd4-a306-caefd49068f5";
+    
+    Promise.all([
+      api.get("/contacts").catch(() => ({ data: [] })),
+      api.get(`/companies/${compId}/campaigns`).catch(() => ({ data: [] })),
+      api.get("/templates").catch(() => ({ data: [] })),
+      api.get("/users").catch(() => ({ data: [] }))
+    ]).then(([resContacts, resCampaigns, resTemplates, resUsers]) => {
+      setContacts(resContacts.data.map(c => ({
+        id: c.id,
+        name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.phone,
+        phone: c.phone,
+        segment: c.segment || 'All',
+        district: c.district || 'None',
+        consent: (c.consentStatus || 'unknown').toLowerCase(),
+        lastActivity: new Date(c.lastInboundAt || c.createdAt || Date.now()).toLocaleDateString()
+      })));
+      const campaignsArr = Array.isArray(resCampaigns.data) ? resCampaigns.data : (resCampaigns.data?.data || []);
+      setCampaigns(campaignsArr.map(c => ({
+        id: c.id,
+        name: c.name,
+        template: c.template?.name || c.templateName || "Unknown",
+        status: (c.status || 'draft').toLowerCase(),
+        recipients: c.totalRecipients || c.recipientsCount || 0,
+        sent: c.sentCount || 0,
+        delivered: c.deliveredCount || 0,
+        read: c.readCount || 0,
+        failed: c.failedCount || 0,
+      })));
+      setTemplates(resTemplates.data || []);
+      setUsers(resUsers.data || []);
+      setIsLoading(false);
+    }).catch(err => {
+      if (err.response?.status === 401) {
+        setToken(null);
+        setUser(null);
+        localStorage.removeItem("crm_session_active");
+        localStorage.removeItem("crm_user");
+      }
+      setIsLoading(false);
+    });
+  }, [token]); // removed user to prevent loop
+
+  const handleLogin = async (credentials) => {
+    try {
+      const res = await authService.login(credentials.email, credentials.password);
+      const userData = { 
+        name: res.data.user?.name || "Admin", 
+        role: res.data.user?.role === "ADMIN" ? "Administrator" : "Sales / Support",
+        companyId: res.data.user?.companyId 
+      };
+      localStorage.setItem("crm_session_active", "true");
+      localStorage.setItem("crm_user", JSON.stringify(userData));
+      setUser(userData);
+      setToken("active");
+      // Trigger a reload to fetch data via the useEffect
+      window.location.reload();
+    } catch (err) {
+      alert("Login failed: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (e) {}
+    localStorage.removeItem("crm_session_active");
+    localStorage.removeItem("crm_user");
+    setToken(null);
+    setUser(null);
+  };
+
+  if (!token || !user) {
     return (
       <div className={`crm-root${dark ? " dark" : ""}`}>
         <Tokens />
-        <LoginPage onLogin={setUser} />
+        <LoginPage onLogin={handleLogin} />
       </div>
     );
+  }
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center">Loading Data...</div>;
   }
 
   const toggleMenu = () => setMobileOpen(o => !o);
   const pages = {
     dashboard: <Dashboard contacts={contacts} campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
-    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    contacts: <Contacts contacts={contacts} setContacts={setContacts} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} templates={templates} />,
     campaigns: <Campaigns contacts={contacts} templates={templates} campaigns={campaigns} setCampaigns={setCampaigns} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
-    templates: <Templates templates={templates} setTemplates={setTemplates} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    templates: <Templates templates={templates} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
     reports: <Reports campaigns={campaigns} onMenuClick={toggleMenu} menuOpen={mobileOpen} dark={dark} />,
-    admin: <Admin users={users} setUsers={setUsers} notify={notify} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
+    admin: <Admin users={users} onMenuClick={toggleMenu} menuOpen={mobileOpen} />,
   };
 
   return (
     <div className={`crm-root min-h-screen flex${dark ? " dark" : ""}`}>
       <Tokens />
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setUser(null)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={handleLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
       <div className="flex-1 min-w-0 flex flex-col">
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-7 lg:p-8">
           {pages[active]}

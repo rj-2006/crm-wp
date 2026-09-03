@@ -1,12 +1,10 @@
-import { Body, Controller, Get, Patch, Post, Param, Query, Req, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Param, Query, Req, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ContactsService } from './contacts.service';
-import { AuthGuard } from '../common/auth.guard';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { UpdateConsentDto } from './dto/update-consent.dto';
 
-@UseGuards(AuthGuard)
 @Controller('contacts')
 export class ContactsController {
   constructor(private s: ContactsService) {}
