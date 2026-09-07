@@ -218,6 +218,68 @@ const Tokens = () => (
 
     a, button, input, select { font-family: inherit; }
     *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* ─── Touch & mobile baseline ─────────────────────────────────── */
+    html { -webkit-text-size-adjust: 100%; }
+    body { overflow-x: hidden; }
+    .crm-scrollbar { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+    button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    input, select, textarea { font-size: 16px; } /* iOS: prevent zoom on focus */
+
+    /* Tap-target floor (44×44) for bare icon buttons — without making them look chunky. */
+    .crm-tap { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+
+    /* Card-list scroll affordance: a soft right-edge fade on tables that can horizontally scroll. */
+    .crm-scroll-fade { mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%); -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%); }
+
+    /* ─── Responsive breakpoints ──────────────────────────────────── */
+    /* Default ≥ lg: 1024px+ (desktop sidebar visible). Everything below collapses to single-column / mobile-first. */
+
+    @media (max-width: 1023px) {
+      /* Hide the perspective on small screens — 3D tilt on touch is jarring and wrecks perf. */
+      .crm-perspective, nav.crm-scrollbar { perspective: none !important; }
+    }
+
+    @media (max-width: 640px) {
+      .crm-root { font-size: 14.5px; }
+      /* Slightly tighter card padding on phones so the screen breathes. */
+      .crm-card.p-4, .crm-card.p-5, .crm-card.p-6 { padding: 14px !important; }
+      .crm-card.p-10 { padding: 28px 18px !important; }
+      /* Page headers — clamp the title, hide subtitle to save vertical space. */
+      .crm-page-title { font-size: 1.25rem !important; line-height: 1.2; }
+      .crm-page-subtitle { font-size: 12.5px; }
+      /* Compact buttons on phones. */
+      .crm-btn-primary, .crm-btn-secondary, .crm-btn-accent { padding: 10px 14px !important; }
+      /* Mobile drawer hits the right edge: 92vw, but capped so it doesn't feel claustrophobic. */
+      .crm-drawer-mobile { width: min(320px, 92vw) !important; }
+    }
+
+    @media (max-width: 480px) {
+      /* iPhone SE-class: 2-col KPI grid becomes 1-col. */
+      .crm-kpi-grid { grid-template-columns: 1fr !important; }
+    }
+
+    @media (min-width: 481px) and (max-width: 640px) {
+      /* Larger phones: 2-col KPI grid is fine. */
+      .crm-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+
+    @media (max-width: 380px) {
+      .crm-root { font-size: 14px; }
+    }
+
+    /* Stepper: on small screens the labels need to wrap or hide. We hide step labels < sm and
+       only show the numbered circles; current step label appears below. */
+    @media (max-width: 640px) {
+      .crm-stepper-label { display: none; }
+      .crm-stepper-current { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+    }
+
+    /* Modal/Confirm on mobile: span the full viewport with sheet-style top alignment, not centered. */
+    @media (max-width: 640px) {
+      .crm-modal-card { width: calc(100vw - 24px) !important; max-width: none !important; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .crm-root * { transition: none !important; animation: none !important; }
       .crm-drawer-in, .crm-drawer-out, .crm-backdrop-in, .crm-backdrop-out { animation: none !important; }
@@ -436,22 +498,22 @@ function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = 
       style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
       <div onClick={onCancel} className="crm-backdrop-in" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} />
-      <div className="crm-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
+      <div className="crm-card crm-modal-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
         <div className="flex items-start gap-3 mb-4">
           <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary"}`}>
             <AlertTriangle size={17} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-semibold text-sm">{title}</p>
             <p className="text-xs text-muted mt-1">{description}</p>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary px-3 py-2 text-sm font-medium disabled:opacity-40">Cancel</button>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary crm-tap px-3 py-2.5 text-sm font-medium disabled:opacity-40">Cancel</button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className={`px-3 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
+            className={`crm-tap px-3 py-2.5 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center justify-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
             style={danger ? { background: "var(--danger)" } : undefined}
           >
             {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
@@ -466,30 +528,30 @@ function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = 
 function Toast({ message, onClose }) {
   React.useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
-    <div className="fixed bottom-5 right-5 z-50 crm-card bg-ink text-white px-4 py-3 flex items-center gap-2 shadow-lg border-0">
-      <CheckCheck size={16} className="text-accent" />
-      <span className="text-sm">{message}</span>
+    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-5 sm:bottom-5 z-50 crm-card bg-ink text-white px-4 py-3 flex items-center gap-2 shadow-lg border-0 max-w-sm sm:max-w-md">
+      <CheckCheck size={16} className="text-accent shrink-0" />
+      <span className="text-sm flex-1">{message}</span>
     </div>
   );
 }
 
 function PageHeader({ title, subtitle, onMenuClick, menuOpen }) {
   return (
-    <div className="flex items-start gap-3 mb-6">
+    <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
       <button
         onClick={onMenuClick}
         aria-label={menuOpen ? "Close menu" : "Open menu"}
         aria-expanded={!!menuOpen}
-        className="lg:hidden"
-        style={{ padding: 10, marginLeft: -10, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
+        className="lg:hidden crm-tap"
+        style={{ marginLeft: -8, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
       >
         <span className={`crm-burger ${menuOpen ? "crm-burger-open" : ""}`}>
           <span /><span /><span />
         </span>
       </button>
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-        {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
+      <div className="min-w-0">
+        <h1 className="crm-page-title text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+        {subtitle && <p className="crm-page-subtitle text-sm text-muted mt-1">{subtitle}</p>}
       </div>
     </div>
   );
@@ -591,20 +653,20 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
           value={password} onChange={e => setPassword(e.target.value)}
           className="crm-input w-full px-3 py-2.5 text-sm pr-10"
         />
-        <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-2">
+        <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-2 p-1 crm-tap" aria-label={showPw ? "Hide password" : "Show password"}>
           {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       </div>
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-5">
         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
           <input type="checkbox" defaultChecked className="w-3.5 h-3.5 rounded border-default" style={{ accentColor }} />
           Remember me
         </label>
-        <button onClick={onForgot} className="text-xs font-medium hover:underline" style={{ color: accentColor }}>Forgot password?</button>
+        <button onClick={onForgot} className="text-xs font-medium hover:underline text-left sm:text-right" style={{ color: accentColor }}>Forgot password?</button>
       </div>
       <button
         onClick={() => onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role })}
-        className={`${btnClass} w-full py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
+        className={`${btnClass} crm-tap w-full py-3 sm:py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
       >
         Sign in as {role} <ArrowRight size={15} />
       </button>
@@ -640,7 +702,7 @@ function LoginPage({ onLogin }) {
               <button
                 key={r}
                 onClick={() => handleRoleSwitch(r)}
-                className={`flex-1 text-sm py-2.5 font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex-1 text-xs sm:text-sm py-3 sm:py-2.5 font-medium border-b-2 -mb-px transition-colors crm-tap ${
                   role === r ? "border-primary text-primary" : "border-transparent text-muted hover:text-ink"
                 }`}
               >
@@ -823,10 +885,10 @@ function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, s
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 30 }}
       />
       <aside
-        className={`lg:hidden bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
+        className={`lg:hidden crm-drawer-mobile bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
         style={{
           position: "fixed", top: 0, left: 0, height: "100vh", width: "min(288px, 85vw)",
-          zIndex: 40, display: "flex", flexDirection: "column", padding: "24px 16px",
+          zIndex: 40, display: "flex", flexDirection: "column", padding: "20px 14px",
           overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)"
         }}
       >
@@ -968,7 +1030,7 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
     <div>
       <PageHeader title="Dashboard Overview" subtitle="Real-time metrics and campaign performance." onMenuClick={onMenuClick} menuOpen={menuOpen} />
 
-      <div className="crm-perspective grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="crm-perspective crm-kpi-grid grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <KpiCard label="Contacts Opted In" value={optedIn} delta={`↗ +4.2% this week`} icon={Users} />
         <KpiCard label="Active Campaigns" value={active} delta="scheduled today" icon={Send} />
         <KpiCard label="Delivery Rate" value={`${rate}%`} delta="↗ +0.5% vs last month" icon={CheckCheck} />
@@ -976,47 +1038,47 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       </div>
 
       <div className="grid lg:grid-cols-5 gap-3 mb-4">
-        <div className="lg:col-span-3 crm-card p-6">
-          <p className="text-lg font-semibold mb-4">Delivery Performance</p>
+        <div className="lg:col-span-3 crm-card p-4 sm:p-6">
+          <p className="text-base sm:text-lg font-semibold mb-4">Delivery Performance</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={deliveryTrend}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="day" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} width={32} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
               <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
-          <div className="flex justify-center gap-6 mt-2">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 mt-2">
             <div className="flex items-center gap-2 text-xs text-muted"><span className="w-3 h-3 rounded-full bg-primary" />Delivered</div>
             <div className="flex items-center gap-2 text-xs text-muted"><span className="w-3 h-3 rounded-full bg-accent" />Read</div>
           </div>
         </div>
 
-        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center">
-          <p className="text-lg font-semibold w-full text-left mb-6">Consent Status</p>
+        <div className="lg:col-span-2 crm-card p-4 sm:p-6 flex flex-col items-center">
+          <p className="text-base sm:text-lg font-semibold w-full text-left mb-4 sm:mb-6">Consent Status</p>
           <div
-            className="relative w-40 h-40 rounded-full flex items-center justify-center my-auto"
+            className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full flex items-center justify-center my-auto"
             style={{ background: `conic-gradient(${consentSplit.map((c, i) => {
               const start = consentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
               const end = start + (c.value / totalConsent * 100);
               return `${consentColors[c.key]} ${start}% ${end}%`;
             }).join(", ")})` }}
           >
-            <div className="w-28 h-28 bg-surface rounded-full flex flex-col items-center justify-center">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-surface rounded-full flex flex-col items-center justify-center">
               <span className="text-xl font-bold">{totalConsent}</span>
               <span className="text-xs text-muted">Total</span>
             </div>
           </div>
-          <div className="w-full mt-6 space-y-2.5">
+          <div className="w-full mt-4 sm:mt-6 space-y-2.5">
             {consentSplit.map(c => (
               <div key={c.key} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded" style={{ background: consentColors[c.key] }} />
-                  <span className="text-muted">{c.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-3 h-3 rounded shrink-0" style={{ background: consentColors[c.key] }} />
+                  <span className="text-muted truncate">{c.name}</span>
                 </div>
-                <span className="font-bold">{Math.round(c.value / totalConsent * 100)}%</span>
+                <span className="font-bold shrink-0 ml-2">{Math.round(c.value / totalConsent * 100)}%</span>
               </div>
             ))}
           </div>
@@ -1024,11 +1086,11 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       </div>
 
       <div className="crm-card overflow-hidden">
-        <div className="p-4 border-b border-default flex justify-between items-center bg-surface-bright">
-          <p className="text-lg font-semibold">Recent Campaigns</p>
+        <div className="p-4 border-b border-default flex flex-wrap justify-between items-center gap-2 bg-surface-bright">
+          <p className="text-base sm:text-lg font-semibold">Recent Campaigns</p>
           <button className="text-xs font-medium text-primary hover:underline">View All</button>
         </div>
-        <div className="overflow-x-auto crm-scrollbar">
+        <div className="overflow-x-auto crm-scrollbar crm-scroll-fade">
           <table className="w-full text-sm min-w-[600px] border-collapse">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1076,12 +1138,12 @@ function AddContactPanel({ onClose, onAdd }) {
   };
 
   return (
-    <div className="crm-card p-5 mb-4">
+    <div className="crm-card p-4 sm:p-5 mb-4">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} /> Add contact</p>
-        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
+        <button onClick={onClose} className="text-muted hover:text-ink p-1 crm-tap" aria-label="Close add contact panel"><X size={16} /></button>
       </div>
-      <div className="grid sm:grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <div>
           <label className="block text-xs text-muted mb-1">Full name</label>
           <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -1120,7 +1182,7 @@ function AddContactPanel({ onClose, onAdd }) {
           setSaving(true);
           setTimeout(() => { onAdd(form); onClose(); }, 500);
         }}
-        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
+        className="crm-btn-primary crm-tap w-full sm:w-auto px-4 py-2.5 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
       >
         {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
         {saving ? "Saving…" : "Save contact"}
@@ -1164,15 +1226,15 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
         <PageHeader title="Contacts Directory" subtitle="Manage and segment your WhatsApp customer base." onMenuClick={onMenuClick} menuOpen={menuOpen} />
         <div className="flex gap-2 shrink-0">
           <div style={{ position: "relative" }} ref={filterRef}>
             <button
               onClick={() => setFilterOpen(o => !o)}
-              className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium"
+              className="crm-btn-secondary crm-tap flex items-center gap-2 px-4 py-2 text-sm font-medium"
             >
-              <Filter size={15} /> Filter
+              <Filter size={15} /> <span className="hidden xs:inline sm:inline">Filter</span>
               {consentFilter !== "All" && (
                 <span style={{
                   width: 16, height: 16, borderRadius: "50%", background: "var(--primary)", color: "#fff",
@@ -1182,7 +1244,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
             </button>
             {filterOpen && (
               <div style={{
-                position: "absolute", top: "calc(100% + 6px)", left: 0, width: 200, maxWidth: "calc(100vw - 32px)",
+                position: "absolute", top: "calc(100% + 6px)", right: 0, left: "auto", width: 200, maxWidth: "calc(100vw - 32px)",
                 background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
                 boxShadow: "0 10px 30px -8px rgba(0,0,0,0.25)", padding: 10, zIndex: 50,
                 animation: "popin 160ms ease-out both"
@@ -1194,7 +1256,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                   <button
                     key={opt.value}
                     onClick={() => { setConsentFilter(opt.value); setFilterOpen(false); }}
-                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
+                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2.5 text-sm text-muted hover:bg-bg hover:text-ink crm-tap"
                     style={consentFilter === opt.value ? { color: "var(--primary)", fontWeight: 600, background: "var(--primary-soft)" } : undefined}
                   >
                     {opt.label}
@@ -1204,35 +1266,35 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
               </div>
             )}
           </div>
-          <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <UserPlus size={15} /> Add contact
+          <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <UserPlus size={15} /> <span>Add</span>
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="crm-card px-4 py-3 flex items-center gap-2 text-sm">
-          <span className="w-2 h-2 rounded-full bg-accent" />
-          <div><p className="text-[10px] text-muted uppercase tracking-wide">Total</p><p className="font-bold">{contacts.length.toLocaleString()}</p></div>
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
+        <div className="crm-card px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm shrink-0">
+          <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+          <div className="whitespace-nowrap"><p className="text-[10px] text-muted uppercase tracking-wide">Total</p><p className="font-bold leading-tight">{contacts.length.toLocaleString()}</p></div>
         </div>
-        <div className="crm-card px-4 py-3 flex items-center gap-2 text-sm">
-          <span className="w-2 h-2 rounded-full bg-primary" />
-          <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
+        <div className="crm-card px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm shrink-0">
+          <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+          <div className="whitespace-nowrap"><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold leading-tight">{optedInCount.toLocaleString()}</p></div>
         </div>
         <div className="crm-card flex-1 flex items-center overflow-x-auto crm-scrollbar">
           {segments.map(s => (
             <button key={s} onClick={() => setSegmentFilter(s)}
-              className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
+              className={`px-3 sm:px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px crm-tap ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
               {s}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-sm">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
+      <div className="relative mb-4 max-w-full sm:max-w-sm">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2 pointer-events-none" />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name or phone"
-          className="crm-input w-full pl-9 pr-3 py-2 text-sm" />
+          className="crm-input w-full pl-9 pr-3 py-2.5 text-sm" />
       </div>
 
       {showAdd && (
@@ -1270,7 +1332,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                       <p className="crm-mono text-xs text-muted truncate">{c.phone}</p>
                     </div>
                   </div>
-                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-1" aria-label={`Remove ${c.name}`}>
+                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-2 crm-tap" aria-label={`Remove ${c.name}`}>
                     <X size={16} />
                   </button>
                 </div>
@@ -1290,7 +1352,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           </div>
 
           {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar crm-scroll-fade">
             <table className="w-full text-sm min-w-[660px] border-collapse">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1320,7 +1382,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                     <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
                     <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-1" aria-label={`Remove ${c.name}`}>
+                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-2 crm-tap" aria-label={`Remove ${c.name}`}>
                         <X size={15} />
                       </button>
                     </td>
@@ -1387,19 +1449,20 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
         <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
       </div>
 
-      <div className="flex items-center gap-2 mb-6 text-xs">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-5 sm:mb-6 text-xs">
         {steps.map((s, i) => (
           <React.Fragment key={s}>
-            <div className={`flex items-center gap-1.5 ${step === i + 1 ? "text-ink font-medium" : step > i + 1 ? "text-muted" : "text-muted-2"}`}>
+            <div className={`flex items-center gap-1.5 shrink-0 ${step === i + 1 ? "text-ink font-medium" : step > i + 1 ? "text-muted" : "text-muted-2"}`}>
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${step > i + 1 ? "bg-accent text-white border-accent" : step === i + 1 ? "border-primary text-primary" : "border-default"}`}>
                 {step > i + 1 ? <Check size={11} /> : i + 1}
               </span>
-              {s}
+              <span className="crm-stepper-label">{s}</span>
             </div>
-            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "var(--border)" }} />}
+            {i < steps.length - 1 && <div className="flex-1 h-px min-w-[8px]" style={{ background: "var(--border)" }} />}
           </React.Fragment>
         ))}
       </div>
+      <p className="crm-stepper-current sm:hidden">Step {step} of {steps.length}: <span className="text-ink font-medium">{steps[step - 1]}</span></p>
 
       {step === 1 && (
         <div>
@@ -1454,14 +1517,14 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
         </div>
       )}
 
-      <div className="flex justify-between mt-6 pt-4 border-t border-default">
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 sm:gap-0 mt-4 sm:mt-6 pt-4 border-t border-default">
         <button onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}
-          className="flex items-center gap-1 text-sm text-muted disabled:opacity-30 px-3 py-2">
+          className="flex items-center justify-center gap-1 text-sm text-muted disabled:opacity-30 px-3 py-2.5 crm-tap">
           <ChevronLeft size={15} /> Back
         </button>
         {step < 4 ? (
           <button onClick={() => setStep(s => s + 1)} disabled={(step === 1 && (!name || eligible.length === 0)) || (step === 2 && !templateId)}
-            className="crm-btn-primary flex items-center gap-1 px-4 py-2 text-sm disabled:opacity-40">
+            className="crm-btn-primary crm-tap flex items-center justify-center gap-1 px-4 py-2.5 text-sm disabled:opacity-40">
             Continue <ChevronRight size={15} />
           </button>
         ) : (
@@ -1473,7 +1536,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
                 onLaunch({ name: name || "Untitled campaign", segment, template: template.name, recipients: eligible.length });
               }, 600);
             }}
-            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
+            className="crm-btn-accent crm-tap flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:opacity-60"
           >
             {launching
               ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} /> Launching…</>
@@ -1489,9 +1552,9 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
   const [showWizard, setShowWizard] = useState(false);
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
         <PageHeader title="Campaigns" subtitle="State-based sends, queued and rate-limited." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-        <button onClick={() => setShowWizard(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
+        <button onClick={() => setShowWizard(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0">
           <Plus size={15} /> New campaign
         </button>
       </div>
@@ -1521,15 +1584,15 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
             return (
               <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="crm-mono text-xs text-muted">{c.id}</span>
                       <CampaignStatusBadge status={c.status} />
                     </div>
-                    <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
+                    <p className="font-medium truncate">{c.name}</p>
+                    <p className="text-xs text-muted mt-0.5 truncate">{c.template} · {c.segment}</p>
                   </div>
-                  <div className="flex gap-4 text-xs">
+                  <div className="grid grid-cols-4 sm:flex sm:gap-4 gap-2 text-xs">
                     <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
                     <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
                     <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
@@ -1598,9 +1661,9 @@ function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
   const [showRequest, setShowRequest] = useState(false);
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
         <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
+        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0">
           <Plus size={15} /> Request template
         </button>
       </div>
@@ -1658,19 +1721,21 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
   return (
     <div>
       <PageHeader title="Reports" subtitle="Campaign performance and delivery outcomes." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-      <div className="crm-card p-6 mb-4">
-        <p className="text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={data}>
-            <CartesianGrid stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
-            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="crm-card p-4 sm:p-6 mb-4">
+        <p className="text-base sm:text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
+        <div className="overflow-x-auto crm-scrollbar crm-scroll-fade">
+          <ResponsiveContainer width="100%" minWidth={300} height={260}>
+            <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} width={32} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
+              <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       {campaigns.length === 0 ? (
         <div className="crm-card p-10 text-center">
@@ -1700,7 +1765,7 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
           </div>
 
           {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar crm-scroll-fade">
             <table className="w-full text-sm min-w-[600px] border-collapse">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1797,33 +1862,33 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
   return (
     <div>
       <PageHeader title="Admin" subtitle="Users, WhatsApp account configuration, and access." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-      <div className="grid lg:grid-cols-2 gap-3 mb-4">
-        <div className="crm-card p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+        <div className="crm-card p-4 sm:p-5">
           <p className="text-sm font-semibold mb-3 flex items-center gap-2"><ShieldCheck size={15} className="text-primary" /> WhatsApp account configuration</p>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between border-b border-default pb-2">
-              <span className="text-muted">Provider</span><span className="text-xs">Not yet selected</span>
+            <div className="flex justify-between border-b border-default pb-2 gap-3">
+              <span className="text-muted shrink-0">Provider</span><span className="text-xs text-right">Not yet selected</span>
             </div>
-            <div className="flex justify-between border-b border-default pb-2">
-              <span className="text-muted">Business verification</span><Badge tone="warning">Pending client confirmation</Badge>
+            <div className="flex justify-between border-b border-default pb-2 gap-3">
+              <span className="text-muted shrink-0">Business verification</span><Badge tone="warning">Pending client confirmation</Badge>
             </div>
-            <div className="flex justify-between items-center border-b border-default pb-2">
-              <span className="text-muted">API credentials</span>
-              <span className="crm-mono text-xs flex items-center gap-2">
-                {masked ? "••••••••••••3921" : "wh_live_9f2a...3921"}
-                <button onClick={() => setMasked(m => !m)} className="text-muted-2 hover:text-ink"><Eye size={13} /></button>
+            <div className="flex justify-between items-center border-b border-default pb-2 gap-3">
+              <span className="text-muted shrink-0">API credentials</span>
+              <span className="crm-mono text-xs flex items-center gap-2 min-w-0">
+                <span className="truncate">{masked ? "••••••••••••3921" : "wh_live_9f2a...3921"}</span>
+                <button onClick={() => setMasked(m => !m)} className="text-muted-2 hover:text-ink p-1 crm-tap" aria-label={masked ? "Show credentials" : "Hide credentials"}><Eye size={13} /></button>
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Webhook endpoint</span><span className="crm-mono text-xs">/webhooks/whatsapp</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted shrink-0">Webhook endpoint</span><span className="crm-mono text-xs truncate text-right">/webhooks/whatsapp</span>
             </div>
           </div>
         </div>
-        <div className="crm-card p-5">
+        <div className="crm-card p-4 sm:p-5">
           <p className="text-sm font-semibold mb-3 flex items-center gap-2"><Sparkles size={15} className="text-accent" /> Messaging policy checks</p>
           <ul className="space-y-2.5 text-sm">
             {["Consent required before bulk send", "Opt-outs auto-excluded from campaigns", "Only approved templates for first-contact sends", "Rate limiting enforced at worker layer"].map(t => (
-              <li key={t} className="flex items-center gap-2"><Check size={14} className="text-accent shrink-0" /> {t}</li>
+              <li key={t} className="flex items-start gap-2"><Check size={14} className="text-accent shrink-0 mt-0.5" /> <span>{t}</span></li>
             ))}
           </ul>
         </div>
@@ -1841,9 +1906,9 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
       )}
 
       <div className="crm-card overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright gap-2">
           <p className="text-sm font-semibold">Users</p>
-          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium">
+          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium crm-tap">
             <Plus size={13} /> Invite user
           </button>
         </div>
@@ -1863,7 +1928,7 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
         </div>
 
         {/* Table — sm and up */}
-        <div className="hidden sm:block overflow-x-auto crm-scrollbar">
+        <div className="hidden sm:block overflow-x-auto crm-scrollbar crm-scroll-fade">
           <table className="w-full text-sm min-w-[540px] border-collapse">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1928,7 +1993,7 @@ export default function App() {
       <Tokens />
       <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setUser(null)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-7 lg:p-8">
+        <main className="flex-1 min-w-0 p-3 sm:p-5 md:p-6 lg:p-8">
           {pages[active]}
         </main>
       </div>
