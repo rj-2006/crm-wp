@@ -16,6 +16,8 @@ RUN npm run build
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
 
+RUN mkdir -p /etc/nginx/templates
+
 RUN printf 'server {\n\
     listen ${PORT};\n\
     location / {\n\
