@@ -3,12 +3,48 @@ import {
   LayoutDashboard, Users, Send, FileText, BarChart3, Settings, LogOut,
   Search, Plus, Filter, Check, CheckCheck, X, ChevronRight, ChevronLeft,
   HelpCircle, ShieldCheck, ArrowRight, AlertTriangle, UserPlus, Trash2,
-  Eye, EyeOff, Sparkles, Sun, Moon
+  Eye, EyeOff, Sparkles, Sun, Moon, Mail, Lock, User, BadgeCheck
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
 } from "recharts";
+
+/* ------------------------------------------------------------------ */
+/*  THEME TRANSITION                                                    */
+/*  Two bugs caused the dark-mode crossfade to lag or break:            */
+/*  1) Toggling only React state left the "after" snapshot depending on */
+/*     when React got around to committing — sometimes after the        */
+/*     browser had already captured it, so the crossfade lagged or      */
+/*     played against the wrong frame. The fix is to flip the `dark`    */
+/*     class straight on the DOM node inside the transition callback,   */
+/*     which applies instantly with no render/commit to wait on; the    */
+/*     React state update rides along for the icon/aria-checked bits.   */
+/*  2) Clicking the toggle again before the first crossfade finished    */
+/*     could throw ("transition already in progress") or leave the      */
+/*     document straddling both themes — skipTransition() on the        */
+/*     in-flight transition before starting a new one avoids that.      */
+/* ------------------------------------------------------------------ */
+let activeThemeTransition = null;
+
+function toggleDarkMode(apply) {
+  const reduced = typeof window !== "undefined" && window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (typeof document === "undefined" || !document.startViewTransition || reduced) {
+    apply();
+    return;
+  }
+
+  if (activeThemeTransition) {
+    activeThemeTransition.skipTransition();
+  }
+  const transition = document.startViewTransition(apply);
+  activeThemeTransition = transition;
+  transition.finished.catch(() => {}).finally(() => {
+    if (activeThemeTransition === transition) activeThemeTransition = null;
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /*  DESIGN TOKENS                                                      */
@@ -140,6 +176,12 @@ const Tokens = () => (
     .crm-btn-accent:active { transform: scale(0.98); }
     .crm-btn-accent:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
+    .crm-spin-ring {
+      display: inline-block; width: 13px; height: 13px; border-radius: 9999px;
+      border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+      animation: spin 0.7s linear infinite;
+    }
+
     .crm-nav-item {
       border-radius: 6px;
       transition: background-color 110ms ease-out, color 70ms ease-out 45ms;
@@ -148,6 +190,35 @@ const Tokens = () => (
       background: var(--accent-soft);
       color: var(--primary);
       font-weight: 700;
+    }
+
+    .crm-sidebar-rail {
+      transition: width 180ms cubic-bezier(0.4,0,0.2,1);
+    }
+    .crm-rail-item { position: relative; }
+    .crm-rail-tooltip {
+      position: absolute;
+      left: calc(100% + 10px);
+      top: 50%;
+      transform: translateY(-50%) translateX(-4px);
+      background: var(--ink);
+      color: var(--surface);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease-out, transform 120ms ease-out;
+      transition-delay: 0ms;
+      z-index: 60;
+      box-shadow: 0 8px 20px -6px rgba(0,0,0,0.3);
+    }
+    .crm-rail-item:hover .crm-rail-tooltip {
+      opacity: 1;
+      transform: translateY(-50%) translateX(0);
+      transition-delay: 250ms;
     }
 
     .crm-perspective { perspective: 800px; }
@@ -202,6 +273,52 @@ const Tokens = () => (
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* New rows/cards ease in from above with a soft highlight wash that
+       fades — reads as "this just arrived" without a jarring pop.
+       Removed rows shrink and fade in place; the array entry itself is
+       only spliced out once this has finished playing (see components). */
+    @keyframes row-in {
+      0%   { opacity: 0; transform: translateY(-10px) scale(0.98); background-color: var(--accent-soft); }
+      60%  { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 1; transform: translateY(0) scale(1); background-color: transparent; }
+    }
+    @keyframes row-out {
+      0%   { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.94) translateX(6px); }
+    }
+    .crm-row-in  { animation: row-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .crm-row-out { animation: row-out 220ms cubic-bezier(0.4, 0, 1, 1) both; pointer-events: none; }
+
+    /* Inline "add" panels (new contact, new template request, invite user)
+       drop in as one settled unit rather than snapping into the layout. */
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateY(-10px) scale(0.985); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .crm-panel-in { animation: panel-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: top center; }
+
+    /* Sign-out sequence: brand mark settles in, holds, then the whole
+       overlay dissolves — one orchestrated moment rather than a hard cut
+       to the login screen. */
+    @keyframes logout-overlay {
+      0%   { opacity: 0; }
+      12%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes logout-mark {
+      0%   { opacity: 0; transform: scale(0.9) translateY(4px); }
+      18%  { opacity: 1; transform: scale(1) translateY(0); }
+      82%  { opacity: 1; transform: scale(1) translateY(0); }
+      100% { opacity: 0; transform: scale(0.97) translateY(-4px); }
+    }
+    .crm-logout-ring {
+      width: 30px; height: 30px; border-radius: 9999px;
+      border: 2px solid rgba(255,255,255,0.18);
+      border-top-color: rgba(255,255,255,0.85);
+      animation: spin 0.7s linear infinite;
+    }
+
     /* Hamburger <-> X morph. Three bars rotate/fade into an X on .crm-burger-open. */
     .crm-burger { width: 20px; height: 16px; position: relative; display: inline-block; }
     .crm-burger span {
@@ -218,71 +335,16 @@ const Tokens = () => (
 
     a, button, input, select { font-family: inherit; }
     *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-    /* ─── Touch & mobile baseline ─────────────────────────────────── */
-    html { -webkit-text-size-adjust: 100%; }
-    body { overflow-x: hidden; }
-    .crm-scrollbar { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-    button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-    input, select, textarea { font-size: 16px; } /* iOS: prevent zoom on focus */
-
-    /* Tap-target floor (44×44) for bare icon buttons — without making them look chunky. */
-    .crm-tap { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
-
-    /* Card-list scroll affordance: a soft right-edge fade on tables that can horizontally scroll. */
-    .crm-scroll-fade { mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%); -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%); }
-
-    /* ─── Responsive breakpoints ──────────────────────────────────── */
-    /* Default ≥ lg: 1024px+ (desktop sidebar visible). Everything below collapses to single-column / mobile-first. */
-
-    @media (max-width: 1023px) {
-      /* Hide the perspective on small screens — 3D tilt on touch is jarring and wrecks perf. */
-      .crm-perspective, nav.crm-scrollbar { perspective: none !important; }
-    }
-
-    @media (max-width: 640px) {
-      .crm-root { font-size: 14.5px; }
-      /* Slightly tighter card padding on phones so the screen breathes. */
-      .crm-card.p-4, .crm-card.p-5, .crm-card.p-6 { padding: 14px !important; }
-      .crm-card.p-10 { padding: 28px 18px !important; }
-      /* Page headers — clamp the title, hide subtitle to save vertical space. */
-      .crm-page-title { font-size: 1.25rem !important; line-height: 1.2; }
-      .crm-page-subtitle { font-size: 12.5px; }
-      /* Compact buttons on phones. */
-      .crm-btn-primary, .crm-btn-secondary, .crm-btn-accent { padding: 10px 14px !important; }
-      /* Mobile drawer hits the right edge: 92vw, but capped so it doesn't feel claustrophobic. */
-      .crm-drawer-mobile { width: min(320px, 92vw) !important; }
-    }
-
-    @media (max-width: 480px) {
-      /* iPhone SE-class: 2-col KPI grid becomes 1-col. */
-      .crm-kpi-grid { grid-template-columns: 1fr !important; }
-    }
-
-    @media (min-width: 481px) and (max-width: 640px) {
-      /* Larger phones: 2-col KPI grid is fine. */
-      .crm-kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-    }
-
-    @media (max-width: 380px) {
-      .crm-root { font-size: 14px; }
-    }
-
-    /* Stepper: on small screens the labels need to wrap or hide. We hide step labels < sm and
-       only show the numbered circles; current step label appears below. */
-    @media (max-width: 640px) {
-      .crm-stepper-label { display: none; }
-      .crm-stepper-current { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
-    }
-
-    /* Modal/Confirm on mobile: span the full viewport with sheet-style top alignment, not centered. */
-    @media (max-width: 640px) {
-      .crm-modal-card { width: calc(100vw - 24px) !important; max-width: none !important; }
-    }
-
+    /* Trim motion that moves/scales content at a distance (drawers, row
+       reordering, the tilted chat preview) — the kind that can trigger
+       vestibular discomfort. Short opacity fades that communicate a state
+       change (signing in, signing out, a panel opening) are left alone:
+       removing those entirely made the interface go silent on state
+       changes for anyone with this preference on, which is worse than
+       the motion itself. */
     @media (prefers-reduced-motion: reduce) {
-      .crm-root * { transition: none !important; animation: none !important; }
       .crm-drawer-in, .crm-drawer-out, .crm-backdrop-in, .crm-backdrop-out { animation: none !important; }
+      .crm-row-in, .crm-row-out, .crm-panel-in { animation: none !important; opacity: 1 !important; transform: none !important; }
     }
   `}</style>
 );
@@ -445,10 +507,19 @@ function CampaignStatusBadge({ status }) {
 }
 
 function CenterSuccess({ mode = "add", message, onDone }) {
+  // onDone is a fresh inline function on every render of the parent (e.g.
+  // `onDone={() => setCenterSuccess(null)}`), so depending on it directly
+  // meant any parent re-render while this was showing — a list update, a
+  // hover, anything — restarted the 1400ms timer from zero. A few
+  // re-renders in a row and it never fired, leaving the popup stuck open.
+  // Keep the latest callback in a ref and start the timer once, on mount.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
   useEffect(() => {
-    const t = setTimeout(onDone, 1400);
+    const t = setTimeout(() => onDoneRef.current(), 1400);
     return () => clearTimeout(t);
-  }, [onDone]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdd = mode === "add";
   return (
@@ -498,22 +569,22 @@ function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = 
       style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
     >
       <div onClick={onCancel} className="crm-backdrop-in" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} />
-      <div className="crm-card crm-modal-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
+      <div className="crm-card p-5 w-full max-w-sm relative" style={{ animation: "popin 160ms ease-out both" }}>
         <div className="flex items-start gap-3 mb-4">
           <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary"}`}>
             <AlertTriangle size={17} />
           </div>
-          <div className="min-w-0">
+          <div>
             <p className="font-semibold text-sm">{title}</p>
             <p className="text-xs text-muted mt-1">{description}</p>
           </div>
         </div>
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary crm-tap px-3 py-2.5 text-sm font-medium disabled:opacity-40">Cancel</button>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={loading} className="crm-btn-secondary px-3 py-2 text-sm font-medium disabled:opacity-40">Cancel</button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className={`crm-tap px-3 py-2.5 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center justify-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
+            className={`px-3 py-2 text-sm font-medium rounded-lg text-white disabled:opacity-60 flex items-center gap-2 ${danger ? "" : "crm-btn-primary"}`}
             style={danger ? { background: "var(--danger)" } : undefined}
           >
             {loading && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
@@ -525,33 +596,59 @@ function ConfirmDialog({ title, description, confirmLabel = "Confirm", danger = 
   );
 }
 
+function LogoutOverlay({ name, duration = 1000 }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 16, background: "var(--ink)",
+        animation: `logout-overlay ${duration}ms ease-in-out both`,
+      }}
+    >
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 14,
+        animation: `logout-mark ${duration}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+      }}>
+        <div style={{ width: 44, height: 44, borderRadius: 9, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 17 }}>
+          BI
+        </div>
+        <div className="crm-logout-ring" />
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", margin: 0 }}>
+          Signing {name ? `${name} ` : ""}out…
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Toast({ message, onClose }) {
   React.useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
-    <div className="fixed bottom-3 left-3 right-3 sm:left-auto sm:right-5 sm:bottom-5 z-50 crm-card bg-ink text-white px-4 py-3 flex items-center gap-2 shadow-lg border-0 max-w-sm sm:max-w-md">
-      <CheckCheck size={16} className="text-accent shrink-0" />
-      <span className="text-sm flex-1">{message}</span>
+    <div className="fixed bottom-5 right-5 z-50 crm-card bg-ink text-white px-4 py-3 flex items-center gap-2 shadow-lg border-0">
+      <CheckCheck size={16} className="text-accent" />
+      <span className="text-sm">{message}</span>
     </div>
   );
 }
 
 function PageHeader({ title, subtitle, onMenuClick, menuOpen }) {
   return (
-    <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
+    <div className="flex items-start gap-3 mb-6">
       <button
         onClick={onMenuClick}
         aria-label={menuOpen ? "Close menu" : "Open menu"}
         aria-expanded={!!menuOpen}
-        className="lg:hidden crm-tap"
-        style={{ marginLeft: -8, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
+        className="lg:hidden"
+        style={{ padding: 10, marginLeft: -10, marginTop: -2, color: "var(--ink)", flexShrink: 0, background: "none", border: "none", cursor: "pointer", borderRadius: 6 }}
       >
         <span className={`crm-burger ${menuOpen ? "crm-burger-open" : ""}`}>
           <span /><span /><span />
         </span>
       </button>
-      <div className="min-w-0">
-        <h1 className="crm-page-title text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-        {subtitle && <p className="crm-page-subtitle text-sm text-muted mt-1">{subtitle}</p>}
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+        {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
       </div>
     </div>
   );
@@ -610,15 +707,18 @@ function ForgotPasswordPanel({ role, onBack }) {
       <p className="text-sm font-medium mb-1">Reset your password</p>
       <p className="text-xs text-muted mb-5">Enter the work email linked to your {role} account and we'll send a verification code.</p>
       <label className="block text-xs font-medium text-muted mb-1.5">Work email</label>
-      <input
-        value={email} onChange={e => setEmail(e.target.value)}
-        placeholder="you@client.internal"
-        className="crm-input w-full px-3 py-2.5 text-sm mb-5"
-      />
+      <div className="relative mb-5">
+        <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
+        <input
+          value={email} onChange={e => setEmail(e.target.value)}
+          placeholder="you@client.internal"
+          className="crm-input w-full pl-9 pr-3 py-2.5 text-sm"
+        />
+      </div>
       <button
         disabled={!email.includes("@")}
         onClick={() => setSent(true)}
-        className="crm-btn-primary w-full py-2.5 text-sm font-medium disabled:opacity-40"
+        className="crm-btn-primary w-full py-3 text-sm font-medium disabled:opacity-40"
       >
         Send verification code
       </button>
@@ -631,45 +731,164 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const accentColor = role === "Administrator" ? "#5B8DEF" : "#4ADE9A";
+  const [signingIn, setSigningIn] = useState(false);
+  const accentColor = role === "Administrator" ? "var(--primary)" : "var(--accent)";
   const btnClass = role === "Administrator" ? "crm-btn-primary" : "crm-btn-accent";
+
+  const handleSubmit = () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    setTimeout(() => {
+      onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role });
+    }, 550);
+  };
 
   return (
     <div>
-      <label className="block text-xs font-medium text-muted mb-1.5">Full Name</label>
-      <input
-        value={name} onChange={e => setName(e.target.value)}
-        className="crm-input w-full px-3 py-2.5 text-sm mb-4"
-      />
-      <label className="block text-xs font-medium text-muted mb-1.5">Mail</label>
-      <input
-        value={email} onChange={e => setEmail(e.target.value)}
-        className="crm-input w-full px-3 py-2.5 text-sm mb-4"
-      />
+      <label className="block text-xs font-medium text-muted mb-1.5">Full name</label>
+      <div className="relative mb-4">
+        <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
+        <input
+          value={name} onChange={e => setName(e.target.value)}
+          className="crm-input w-full pl-9 pr-3 py-2.5 text-sm"
+        />
+      </div>
+      <label className="block text-xs font-medium text-muted mb-1.5">Work email</label>
+      <div className="relative mb-4">
+        <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
+        <input
+          type="email"
+          value={email} onChange={e => setEmail(e.target.value)}
+          className="crm-input w-full pl-9 pr-3 py-2.5 text-sm"
+        />
+      </div>
       <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
       <div className="relative mb-2">
+        <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
         <input
           type={showPw ? "text" : "password"}
           value={password} onChange={e => setPassword(e.target.value)}
-          className="crm-input w-full px-3 py-2.5 text-sm pr-10"
+          className="crm-input w-full pl-9 pr-10 py-2.5 text-sm"
         />
-        <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-2 p-1 crm-tap" aria-label={showPw ? "Hide password" : "Show password"}>
+        <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-2 hover:text-muted">
           {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
       </div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-5">
+      <div className="flex items-center justify-between mb-6">
         <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
           <input type="checkbox" defaultChecked className="w-3.5 h-3.5 rounded border-default" style={{ accentColor }} />
           Remember me
         </label>
-        <button onClick={onForgot} className="text-xs font-medium hover:underline text-left sm:text-right" style={{ color: accentColor }}>Forgot password?</button>
+        <button onClick={onForgot} className="text-xs font-medium hover:underline" style={{ color: accentColor }}>Forgot password?</button>
       </div>
       <button
-        onClick={() => onLogin({ name: name.trim() || email.split("@")[0] || "Staff User", role })}
-        className={`${btnClass} crm-tap w-full py-3 sm:py-2.5 text-sm font-medium flex items-center justify-center gap-2`}
+        onClick={handleSubmit}
+        disabled={signingIn}
+        className={`${btnClass} w-full py-3 text-sm font-medium flex items-center justify-center gap-2`}
       >
-        Sign in as {role} <ArrowRight size={15} />
+        {signingIn ? (
+          <>
+            <span className="crm-spin-ring" /> Signing in…
+          </>
+        ) : (
+          <>Sign in <ArrowRight size={15} /></>
+        )}
       </button>
+    </div>
+  );
+}
+
+function ChatMock() {
+  return (
+    <div
+      className="wa-mock"
+      style={{
+        position: "relative", width: 296, borderRadius: 16,
+        background: "rgba(255,255,255,0.045)", border: "1px solid rgba(255,255,255,0.09)",
+        backdropFilter: "blur(6px)", padding: "16px 16px 18px",
+        boxShadow: "0 30px 60px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+          background: "linear-gradient(135deg, var(--accent), var(--primary))",
+          display: "flex", alignItems: "center", justifyContent: "center", color: "#0B1220", fontSize: 12, fontWeight: 700
+        }}>MP</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.92)" }}>Meera Pillai</p>
+          <p style={{ margin: 0, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>Retail account</p>
+        </div>
+        <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9.5, color: "var(--accent)", fontWeight: 600 }}>
+          <BadgeCheck size={12} /> Verified
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="wa-bubble wa-bubble-in" style={{
+          alignSelf: "flex-start", maxWidth: "78%", background: "rgba(255,255,255,0.07)",
+          color: "rgba(255,255,255,0.85)", fontSize: 12.5, lineHeight: 1.4, padding: "8px 11px",
+          borderRadius: "3px 12px 12px 12px"
+        }}>
+          Hi — do you have this month's delivery report?
+        </div>
+
+        <div className="wa-bubble wa-bubble-out" style={{
+          alignSelf: "flex-end", maxWidth: "82%", background: "#EAFBF1",
+          color: "#183828", fontSize: 12.5, lineHeight: 1.4, padding: "8px 11px",
+          borderRadius: "12px 3px 12px 12px", position: "relative"
+        }}>
+          Sending it now — 4,120 delivered, 98% open rate this week.
+          <span style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 3, marginTop: 3 }}>
+            <span style={{ fontSize: 9.5, color: "rgba(24,56,40,0.55)" }}>10:42</span>
+            <span className="wa-ticks">
+              <CheckCheck size={13} />
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginBrandPanel() {
+  return (
+    <div
+      className="hidden lg:flex lg:w-[44%] flex-col justify-between p-10 xl:p-12 relative overflow-hidden"
+      style={{ background: "linear-gradient(160deg, #14161C 0%, #1A1D26 55%, #171A22 100%)" }}
+    >
+      <div style={{
+        position: "absolute", inset: 0,
+        backgroundImage: "radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)",
+        backgroundSize: "22px 22px",
+      }} />
+      <div style={{
+        position: "absolute", width: 420, height: 420, borderRadius: "50%", top: -140, right: -160,
+        background: "radial-gradient(circle, rgba(91,141,239,0.20), transparent 70%)", filter: "blur(10px)"
+      }} />
+      <div style={{
+        position: "absolute", width: 360, height: 360, borderRadius: "50%", bottom: -120, left: -140,
+        background: "radial-gradient(circle, rgba(74,222,154,0.14), transparent 70%)", filter: "blur(10px)"
+      }} />
+
+      <div style={{ position: "relative" }}>
+        <div className="flex items-center gap-3 mb-16">
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
+            BI
+          </div>
+          <span className="text-white text-sm font-semibold tracking-tight">Bharat Infotechs</span>
+        </div>
+        <h2 className="text-white text-[30px] xl:text-[33px] leading-[1.2] font-bold tracking-tight mb-4 max-w-[340px]">
+          Run your WhatsApp business from one console
+        </h2>
+        <p className="text-sm max-w-[300px] leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
+          Sign in to manage contacts, send compliant campaigns, and track delivery for your team.
+        </p>
+      </div>
+
+      <div style={{ position: "relative", alignSelf: "flex-start" }} className="wa-mock-wrap">
+        <ChatMock />
+      </div>
     </div>
   );
 }
@@ -684,45 +903,109 @@ function LoginPage({ onLogin }) {
     setRole(r);
   };
 
+  const roles = [
+    { key: "Administrator", icon: ShieldCheck },
+    { key: "Sales / Support", icon: Users },
+  ];
+
   return (
-    <div className="crm-root min-h-screen flex items-center justify-center p-4 sm:p-6" style={{ background: "var(--bg)" }}>
+    <div className="crm-root min-h-screen flex" style={{ background: "var(--bg)" }}>
       <style>{`
         @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fieldsin { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fieldsin { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+        @keyframes wa-mock-settle {
+          from { opacity: 0; transform: translateY(14px) rotate(0deg); }
+          to   { opacity: 1; transform: translateY(0) rotate(-1.25deg); }
+        }
+        .wa-mock-wrap { animation: wa-mock-settle 700ms cubic-bezier(0.16,1,0.3,1) both; }
+        .wa-mock { transform: rotate(-1.25deg); }
+
+        @keyframes wa-bubble-rise {
+          from { opacity: 0; transform: translateY(8px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .wa-bubble { opacity: 0; animation: wa-bubble-rise 420ms cubic-bezier(0.16,1,0.3,1) both; }
+        .wa-bubble-in { animation-delay: 550ms; }
+        .wa-bubble-out { animation-delay: 900ms; }
+
+        .wa-ticks { color: rgba(24,56,40,0.35); opacity: 0; animation: wa-tick-in 1ms linear 1250ms forwards; }
+        @keyframes wa-tick-in { to { opacity: 1; } }
+        .wa-ticks svg { animation: wa-tick-color 900ms ease-out 1250ms both; }
+        @keyframes wa-tick-color {
+          0%   { color: rgba(24,56,40,0.35); }
+          55%  { color: rgba(24,56,40,0.35); }
+          100% { color: #34B7F1; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .wa-mock-wrap, .wa-bubble, .wa-ticks, .wa-ticks svg { animation: none !important; opacity: 1 !important; transform: none !important; }
+        }
       `}</style>
-      <div className="w-full max-w-sm crm-perspective">
-        <TiltCard maxTilt={3} className="crm-card p-6 sm:p-7">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-extrabold tracking-tight text-primary">Bharat Infotechs</h1>
-            <p className="text-sm text-muted mt-1">Business Console</p>
+
+      <LoginBrandPanel />
+
+      <div className="flex-1 relative overflow-hidden flex items-center justify-center p-6 sm:p-10">
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "radial-gradient(rgba(55,65,81,0.045) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          maskImage: "radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%)",
+          WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%)",
+        }} />
+
+        <div className="w-full max-w-[400px]" style={{ position: "relative" }}>
+          <div className="lg:hidden flex items-center gap-2.5 mb-9">
+            <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+              BI
+            </div>
+            <span className="text-sm font-semibold text-ink">Bharat Infotechs</span>
           </div>
 
-          <div className="flex border-b border-default mb-6">
-            {["Administrator", "Sales / Support"].map(r => (
-              <button
-                key={r}
-                onClick={() => handleRoleSwitch(r)}
-                className={`flex-1 text-xs sm:text-sm py-3 sm:py-2.5 font-medium border-b-2 -mb-px transition-colors crm-tap ${
-                  role === r ? "border-primary text-primary" : "border-transparent text-muted hover:text-ink"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
+          <div
+            className="crm-card"
+            style={{
+              padding: "32px 28px 28px", borderRadius: 16,
+              boxShadow: "0 24px 60px -28px rgba(20,22,28,0.28)"
+            }}
+          >
+            <div className="mb-7">
+              <h1 className="text-xl font-bold tracking-tight text-ink">Sign in to your workspace</h1>
+              <p className="text-sm text-muted mt-1.5">Enter your credentials to continue.</p>
+            </div>
+
+            <div className="flex gap-1 p-1 rounded-lg mb-6" style={{ background: "var(--surface-bright)", border: "1px solid var(--border)" }}>
+              {roles.map(({ key: r, icon: Icon }) => (
+                <button
+                  key={r}
+                  onClick={() => handleRoleSwitch(r)}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs sm:text-[13px] py-2 font-medium rounded-md transition-colors"
+                  style={{
+                    background: role === r ? "var(--surface)" : "transparent",
+                    color: role === r ? "var(--ink)" : "var(--muted)",
+                    border: role === r ? "1px solid var(--border)" : "1px solid transparent",
+                    boxShadow: role === r ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                  }}
+                >
+                  <Icon size={13} /> {r}
+                </button>
+              ))}
+            </div>
+
+            <div key={role + forgotOpen} style={{ animation: "fieldsin 260ms cubic-bezier(0.16,1,0.3,1) both" }}>
+              {forgotOpen ? (
+                <ForgotPasswordPanel role={role} onBack={() => setForgotOpen(false)} />
+              ) : (
+                <RoleCredentialFields role={role} onLogin={onLogin} onForgot={() => setForgotOpen(true)} />
+              )}
+            </div>
           </div>
 
-          <div key={role + forgotOpen} style={{ animation: "fieldsin 320ms cubic-bezier(0.16,1,0.3,1) both" }}>
-            {forgotOpen ? (
-              <ForgotPasswordPanel role={role} onBack={() => setForgotOpen(false)} />
-            ) : (
-              <RoleCredentialFields role={role} onLogin={onLogin} onForgot={() => setForgotOpen(true)} />
-            )}
+          <div className="flex items-center gap-1.5 justify-center mt-6 text-xs text-muted-2">
+            <ShieldCheck size={12} />
+            <span>Prototype — sign-in and email verification are simulated, nothing is sent.</span>
           </div>
-        </TiltCard>
-
-        <p className="text-xs text-muted-2 text-center mt-6">
-          Prototype — sign-in and email verification are simulated, nothing is sent.
-        </p>
+        </div>
       </div>
     </div>
   );
@@ -732,7 +1015,7 @@ function LoginPage({ onLogin }) {
 /*  Sidebar / Shell                                                    */
 /* ------------------------------------------------------------------ */
 
-function SidebarContents({ items, active, setActive, user, onLogout, onNavigate, onCloseClick, dark, setDark }) {
+function SidebarContents({ items, active, setActive, user, onLogout, onNavigate, onCloseClick, dark, onToggleDark, collapsed = false, onToggleCollapse }) {
   const [supportOpen, setSupportOpen] = useState(false);
   const supportRef = useRef(null);
   useEffect(() => {
@@ -746,22 +1029,42 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
 
   return (
     <>
-      <div style={{ marginBottom: 32, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 8px" }}>
+      <div style={{ marginBottom: collapsed ? 20 : 32, display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: 12, padding: collapsed ? 0 : "0 8px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <div style={{ width: 40, height: 40, borderRadius: 6, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 18, flexShrink: 0 }}>
             BI
           </div>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Bharat Infotechs</h1>
-            <p style={{ fontSize: 11, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Business Console</p>
-          </div>
+          {!collapsed && (
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Bharat Infotechs</h1>
+              <p style={{ fontSize: 11, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Business Console</p>
+            </div>
+          )}
         </div>
-        {onCloseClick && (
+        {onCloseClick && !collapsed && (
           <button onClick={onCloseClick} style={{ padding: 4, color: "var(--muted)", flexShrink: 0, background: "none", border: "none", cursor: "pointer" }}>
             <X size={20} />
           </button>
         )}
       </div>
+
+      {onToggleCollapse && (
+        <button
+          onClick={onToggleCollapse}
+          className="crm-rail-item"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
+            gap: 8, width: collapsed ? 40 : "100%", margin: collapsed ? "0 auto 16px" : "0 0 16px",
+            padding: collapsed ? 0 : "6px 10px", height: collapsed ? 32 : "auto",
+            fontSize: 12, fontWeight: 500, color: "var(--muted)",
+            background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer"
+          }}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          {!collapsed && "Collapse"}
+          {collapsed && <span className="crm-rail-tooltip">Expand sidebar</span>}
+        </button>
+      )}
 
       <nav className="crm-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
         {items.map(item => {
@@ -771,71 +1074,83 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
             <TiltNavItem
               key={item.key}
               onClick={() => onNavigate(item.key)}
-              className={`crm-nav-item w-full flex items-center gap-3 px-3 py-2 text-sm ${
+              className={`crm-nav-item crm-rail-item w-full flex items-center py-2 text-sm ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${
                 isActive ? "crm-nav-item-active" : "text-muted hover:bg-bg hover:text-ink"
               }`}
+              style={collapsed ? { width: 40, margin: "0 auto" } : undefined}
             >
               <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-              <span className={isActive ? "font-bold" : "font-medium"}>{item.label}</span>
+              {!collapsed && <span className={isActive ? "font-bold" : "font-medium"}>{item.label}</span>}
+              {collapsed && <span className="crm-rail-tooltip">{item.label}</span>}
             </TiltNavItem>
           );
         })}
       </nav>
 
       <div style={{ paddingTop: 16, marginTop: 16, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "0 4px" }}>
+        <div
+          className={collapsed ? "crm-rail-item" : ""}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+            padding: collapsed ? 0 : "0 4px", justifyContent: collapsed ? "center" : "flex-start"
+          }}
+        >
           <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500, flexShrink: 0 }}>
             {user.name.slice(0, 2).toUpperCase()}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 14, margin: 0, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</p>
-            <p style={{ fontSize: 12, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.role}</p>
-          </div>
+          {!collapsed && (
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 14, margin: 0, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</p>
+              <p style={{ fontSize: 12, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.role}</p>
+            </div>
+          )}
+          {collapsed && <span className="crm-rail-tooltip">{user.name} · {user.role}</span>}
         </div>
 
         <button
-          onClick={() => {
-            const flip = () => setDark(d => !d);
-            if (document.startViewTransition) {
-              document.startViewTransition(flip);
-            } else {
-              flip();
-            }
-          }}
+          onClick={onToggleDark}
           role="switch"
           aria-checked={dark}
+          className={collapsed ? "crm-rail-item" : ""}
           style={{
-            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px", marginBottom: 8, borderRadius: 6, border: "1px solid var(--border)",
+            width: collapsed ? 40 : "100%", height: collapsed ? 32 : "auto", margin: collapsed ? "0 auto 8px" : "0 0 8px",
+            display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between",
+            padding: collapsed ? 0 : "8px 12px", borderRadius: 6, border: "1px solid var(--border)",
             background: "var(--bg)", color: "var(--ink)", fontSize: 13, cursor: "pointer"
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {dark ? <Moon size={15} /> : <Sun size={15} />}
-            {dark ? "Dark mode" : "Light mode"}
+            {!collapsed && (dark ? "Dark mode" : "Light mode")}
           </span>
-          <span style={{
-            position: "relative", width: 34, height: 18, borderRadius: 999,
-            background: dark ? "var(--primary)" : "var(--border)", transition: "background .18s ease", flexShrink: 0
-          }}>
+          {!collapsed && (
             <span style={{
-              position: "absolute", top: 2, left: dark ? 18 : 2, width: 14, height: 14, borderRadius: "50%",
-              background: "#fff", transition: "left .18s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
-            }} />
-          </span>
+              position: "relative", width: 34, height: 18, borderRadius: 999,
+              background: dark ? "var(--primary)" : "var(--border)", transition: "background .18s ease", flexShrink: 0
+            }}>
+              <span style={{
+                position: "absolute", top: 2, left: dark ? 18 : 2, width: 14, height: 14, borderRadius: "50%",
+                background: "#fff", transition: "left .18s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
+              }} />
+            </span>
+          )}
+          {collapsed && <span className="crm-rail-tooltip">{dark ? "Dark mode" : "Light mode"} — toggle</span>}
         </button>
 
         <div style={{ position: "relative" }} ref={supportRef}>
           <button
             onClick={() => setSupportOpen(o => !o)}
-            className="crm-nav-item w-full flex items-center gap-3 px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
+            className={`crm-nav-item w-full flex items-center py-2 text-sm text-muted hover:bg-bg hover:text-ink ${collapsed ? "crm-rail-item justify-center px-0" : "gap-3 px-3"}`}
+            style={collapsed ? { width: 40, margin: "0 auto" } : undefined}
           >
-            <HelpCircle size={16} /> Support
+            <HelpCircle size={16} />
+            {!collapsed && "Support"}
+            {collapsed && <span className="crm-rail-tooltip">Support</span>}
           </button>
           {supportOpen && (
             <div
               style={{
-                position: "absolute", bottom: "calc(100% + 6px)", left: 0, width: 240,
+                position: "absolute", bottom: "calc(100% + 6px)", left: collapsed ? "calc(100% + 10px)" : 0, width: 240,
                 background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
                 boxShadow: "0 10px 30px -8px rgba(0,0,0,0.25)", padding: 14, zIndex: 50,
                 animation: "popin 160ms ease-out both"
@@ -851,15 +1166,21 @@ function SidebarContents({ items, active, setActive, user, onLogout, onNavigate,
             </div>
           )}
         </div>
-        <button onClick={onLogout} className="crm-nav-item w-full flex items-center gap-3 px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink">
-          <LogOut size={16} /> Logout
+        <button
+          onClick={onLogout}
+          className={`crm-nav-item w-full flex items-center py-2 text-sm text-muted hover:bg-danger-soft hover:text-danger ${collapsed ? "crm-rail-item justify-center px-0" : "gap-3 px-3"}`}
+          style={collapsed ? { width: 40, margin: "0 auto" } : undefined}
+        >
+          <LogOut size={16} />
+          {!collapsed && "Log out"}
+          {collapsed && <span className="crm-rail-tooltip">Log out</span>}
         </button>
       </div>
     </>
   );
 }
 
-function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
+function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, onToggleDark }) {
   const navigate = (key) => { setActive(key); setMobileOpen(false); };
 
   // Stay mounted a beat past close so the exit animation can finish playing.
@@ -885,40 +1206,45 @@ function MobileSidebar({ items, active, setActive, user, onLogout, mobileOpen, s
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 30 }}
       />
       <aside
-        className={`lg:hidden crm-drawer-mobile bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
+        className={`lg:hidden bg-surface border-r border-default crm-scrollbar ${closing ? "crm-drawer-out" : "crm-drawer-in"}`}
         style={{
           position: "fixed", top: 0, left: 0, height: "100vh", width: "min(288px, 85vw)",
-          zIndex: 40, display: "flex", flexDirection: "column", padding: "20px 14px",
+          zIndex: 40, display: "flex", flexDirection: "column", padding: "24px 16px",
           overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.35)"
         }}
       >
-        <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} onCloseClick={() => setMobileOpen(false)} dark={dark} setDark={setDark} />
+        <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} onCloseClick={() => setMobileOpen(false)} dark={dark} onToggleDark={onToggleDark} />
       </aside>
     </>
   );
 }
 
-function DesktopSidebar({ items, active, setActive, user, onLogout, dark, setDark }) {
+function DesktopSidebar({ items, active, setActive, user, onLogout, dark, onToggleDark }) {
   const navigate = (key) => setActive(key);
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <aside
-      className="hidden lg:flex bg-surface border-r border-default crm-scrollbar"
+      className="hidden lg:flex bg-surface border-r border-default crm-scrollbar crm-sidebar-rail"
       style={{
-        width: 288, flexShrink: 0, height: "100vh", position: "sticky", top: 0,
-        flexDirection: "column", padding: "24px 16px", overflowY: "auto"
+        width: collapsed ? 76 : 288, flexShrink: 0, height: "100vh", position: "sticky", top: 0,
+        flexDirection: "column", padding: collapsed ? "24px 12px" : "24px 16px", overflowY: "auto", overflowX: "hidden"
       }}
     >
-      <SidebarContents items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} onNavigate={navigate} dark={dark} setDark={setDark} />
+      <SidebarContents
+        items={items} active={active} setActive={setActive} user={user} onLogout={onLogout}
+        onNavigate={navigate} dark={dark} onToggleDark={onToggleDark}
+        collapsed={collapsed} onToggleCollapse={() => setCollapsed(c => !c)}
+      />
     </aside>
   );
 }
 
-function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, setDark }) {
+function Sidebar({ active, setActive, user, onLogout, mobileOpen, setMobileOpen, dark, onToggleDark }) {
   const items = ROUTES.filter(r => r.roles.includes(user.role));
   return (
     <>
-      <DesktopSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} dark={dark} setDark={setDark} />
-      <MobileSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
+      <DesktopSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} dark={dark} onToggleDark={onToggleDark} />
+      <MobileSidebar items={items} active={active} setActive={setActive} user={user} onLogout={onLogout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} onToggleDark={onToggleDark} />
     </>
   );
 }
@@ -965,7 +1291,7 @@ function TiltCard({ className = "", maxTilt = 4, children, ...rest }) {
   );
 }
 
-function TiltNavItem({ isActive, onClick, children, className = "" }) {
+function TiltNavItem({ isActive, onClick, children, className = "", style: styleProp, title }) {
   const ref = useRef(null);
   const [style, setStyle] = useState({ transform: "rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)" });
 
@@ -995,7 +1321,8 @@ function TiltNavItem({ isActive, onClick, children, className = "" }) {
       onClick={onClick}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
-      style={{ ...style, transformStyle: "preserve-3d", willChange: "transform" }}
+      title={title}
+      style={{ ...styleProp, ...style, transformStyle: "preserve-3d", willChange: "transform" }}
       className={className}
     >
       {children}
@@ -1030,7 +1357,7 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
     <div>
       <PageHeader title="Dashboard Overview" subtitle="Real-time metrics and campaign performance." onMenuClick={onMenuClick} menuOpen={menuOpen} />
 
-      <div className="crm-perspective crm-kpi-grid grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="crm-perspective grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <KpiCard label="Contacts Opted In" value={optedIn} delta={`↗ +4.2% this week`} icon={Users} />
         <KpiCard label="Active Campaigns" value={active} delta="scheduled today" icon={Send} />
         <KpiCard label="Delivery Rate" value={`${rate}%`} delta="↗ +0.5% vs last month" icon={CheckCheck} />
@@ -1038,47 +1365,47 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       </div>
 
       <div className="grid lg:grid-cols-5 gap-3 mb-4">
-        <div className="lg:col-span-3 crm-card p-4 sm:p-6">
-          <p className="text-base sm:text-lg font-semibold mb-4">Delivery Performance</p>
+        <div className="lg:col-span-3 crm-card p-6">
+          <p className="text-lg font-semibold mb-4">Delivery Performance</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={deliveryTrend}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="day" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} width={32} />
+              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
               <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 mt-2">
+          <div className="flex justify-center gap-6 mt-2">
             <div className="flex items-center gap-2 text-xs text-muted"><span className="w-3 h-3 rounded-full bg-primary" />Delivered</div>
             <div className="flex items-center gap-2 text-xs text-muted"><span className="w-3 h-3 rounded-full bg-accent" />Read</div>
           </div>
         </div>
 
-        <div className="lg:col-span-2 crm-card p-4 sm:p-6 flex flex-col items-center">
-          <p className="text-base sm:text-lg font-semibold w-full text-left mb-4 sm:mb-6">Consent Status</p>
+        <div className="lg:col-span-2 crm-card p-6 flex flex-col items-center">
+          <p className="text-lg font-semibold w-full text-left mb-6">Consent Status</p>
           <div
-            className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full flex items-center justify-center my-auto"
+            className="relative w-40 h-40 rounded-full flex items-center justify-center my-auto"
             style={{ background: `conic-gradient(${consentSplit.map((c, i) => {
               const start = consentSplit.slice(0, i).reduce((a, s) => a + s.value, 0) / totalConsent * 100;
               const end = start + (c.value / totalConsent * 100);
               return `${consentColors[c.key]} ${start}% ${end}%`;
             }).join(", ")})` }}
           >
-            <div className="w-24 h-24 sm:w-28 sm:h-28 bg-surface rounded-full flex flex-col items-center justify-center">
+            <div className="w-28 h-28 bg-surface rounded-full flex flex-col items-center justify-center">
               <span className="text-xl font-bold">{totalConsent}</span>
               <span className="text-xs text-muted">Total</span>
             </div>
           </div>
-          <div className="w-full mt-4 sm:mt-6 space-y-2.5">
+          <div className="w-full mt-6 space-y-2.5">
             {consentSplit.map(c => (
               <div key={c.key} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-3 h-3 rounded shrink-0" style={{ background: consentColors[c.key] }} />
-                  <span className="text-muted truncate">{c.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded" style={{ background: consentColors[c.key] }} />
+                  <span className="text-muted">{c.name}</span>
                 </div>
-                <span className="font-bold shrink-0 ml-2">{Math.round(c.value / totalConsent * 100)}%</span>
+                <span className="font-bold">{Math.round(c.value / totalConsent * 100)}%</span>
               </div>
             ))}
           </div>
@@ -1086,11 +1413,11 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
       </div>
 
       <div className="crm-card overflow-hidden">
-        <div className="p-4 border-b border-default flex flex-wrap justify-between items-center gap-2 bg-surface-bright">
-          <p className="text-base sm:text-lg font-semibold">Recent Campaigns</p>
+        <div className="p-4 border-b border-default flex justify-between items-center bg-surface-bright">
+          <p className="text-lg font-semibold">Recent Campaigns</p>
           <button className="text-xs font-medium text-primary hover:underline">View All</button>
         </div>
-        <div className="overflow-x-auto crm-scrollbar crm-scroll-fade">
+        <div className="overflow-x-auto crm-scrollbar">
           <table className="w-full text-sm min-w-[600px] border-collapse">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1138,12 +1465,12 @@ function AddContactPanel({ onClose, onAdd }) {
   };
 
   return (
-    <div className="crm-card p-4 sm:p-5 mb-4">
+    <div className="crm-card crm-panel-in p-5 mb-4">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} /> Add contact</p>
-        <button onClick={onClose} className="text-muted hover:text-ink p-1 crm-tap" aria-label="Close add contact panel"><X size={16} /></button>
+        <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+      <div className="grid sm:grid-cols-2 gap-3 mb-4">
         <div>
           <label className="block text-xs text-muted mb-1">Full name</label>
           <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
@@ -1182,7 +1509,7 @@ function AddContactPanel({ onClose, onAdd }) {
           setSaving(true);
           setTimeout(() => { onAdd(form); onClose(); }, 500);
         }}
-        className="crm-btn-primary crm-tap w-full sm:w-auto px-4 py-2.5 text-sm disabled:opacity-40 flex items-center justify-center gap-2"
+        className="crm-btn-primary px-4 py-2 text-sm disabled:opacity-40 flex items-center gap-2"
       >
         {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} />}
         {saving ? "Saving…" : "Save contact"}
@@ -1199,6 +1526,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
   const [centerSuccess, setCenterSuccess] = useState(null);
   const filterRef = useRef(null);
   useEffect(() => {
@@ -1226,15 +1554,15 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Contacts Directory" subtitle="Manage and segment your WhatsApp customer base." onMenuClick={onMenuClick} menuOpen={menuOpen} />
         <div className="flex gap-2 shrink-0">
           <div style={{ position: "relative" }} ref={filterRef}>
             <button
               onClick={() => setFilterOpen(o => !o)}
-              className="crm-btn-secondary crm-tap flex items-center gap-2 px-4 py-2 text-sm font-medium"
+              className="crm-btn-secondary flex items-center gap-2 px-4 py-2 text-sm font-medium"
             >
-              <Filter size={15} /> <span className="hidden xs:inline sm:inline">Filter</span>
+              <Filter size={15} /> Filter
               {consentFilter !== "All" && (
                 <span style={{
                   width: 16, height: 16, borderRadius: "50%", background: "var(--primary)", color: "#fff",
@@ -1244,7 +1572,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
             </button>
             {filterOpen && (
               <div style={{
-                position: "absolute", top: "calc(100% + 6px)", right: 0, left: "auto", width: 200, maxWidth: "calc(100vw - 32px)",
+                position: "absolute", top: "calc(100% + 6px)", left: 0, width: 200, maxWidth: "calc(100vw - 32px)",
                 background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
                 boxShadow: "0 10px 30px -8px rgba(0,0,0,0.25)", padding: 10, zIndex: 50,
                 animation: "popin 160ms ease-out both"
@@ -1256,7 +1584,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                   <button
                     key={opt.value}
                     onClick={() => { setConsentFilter(opt.value); setFilterOpen(false); }}
-                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2.5 text-sm text-muted hover:bg-bg hover:text-ink crm-tap"
+                    className="crm-nav-item w-full flex items-center justify-between px-3 py-2 text-sm text-muted hover:bg-bg hover:text-ink"
                     style={consentFilter === opt.value ? { color: "var(--primary)", fontWeight: 600, background: "var(--primary-soft)" } : undefined}
                   >
                     {opt.label}
@@ -1266,35 +1594,35 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
               </div>
             )}
           </div>
-          <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2 text-sm font-medium">
-            <UserPlus size={15} /> <span>Add</span>
+          <button onClick={() => setShowAdd(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium">
+            <UserPlus size={15} /> Add contact
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-        <div className="crm-card px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm shrink-0">
-          <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
-          <div className="whitespace-nowrap"><p className="text-[10px] text-muted uppercase tracking-wide">Total</p><p className="font-bold leading-tight">{contacts.length.toLocaleString()}</p></div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="crm-card px-4 py-3 flex items-center gap-2 text-sm">
+          <span className="w-2 h-2 rounded-full bg-accent" />
+          <div><p className="text-[10px] text-muted uppercase tracking-wide">Total</p><p className="font-bold">{contacts.length.toLocaleString()}</p></div>
         </div>
-        <div className="crm-card px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 text-sm shrink-0">
-          <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-          <div className="whitespace-nowrap"><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold leading-tight">{optedInCount.toLocaleString()}</p></div>
+        <div className="crm-card px-4 py-3 flex items-center gap-2 text-sm">
+          <span className="w-2 h-2 rounded-full bg-primary" />
+          <div><p className="text-[10px] text-muted uppercase tracking-wide">Opted In</p><p className="font-bold">{optedInCount.toLocaleString()}</p></div>
         </div>
         <div className="crm-card flex-1 flex items-center overflow-x-auto crm-scrollbar">
           {segments.map(s => (
             <button key={s} onClick={() => setSegmentFilter(s)}
-              className={`px-3 sm:px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px crm-tap ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
+              className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px ${segmentFilter === s ? "border-primary text-primary font-medium bg-primary-soft" : "border-transparent text-muted hover:text-ink"}`}>
               {s}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="relative mb-4 max-w-full sm:max-w-sm">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2 pointer-events-none" />
+      <div className="relative mb-4 max-w-sm">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-2" />
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name or phone"
-          className="crm-input w-full pl-9 pr-3 py-2.5 text-sm" />
+          className="crm-input w-full pl-9 pr-3 py-2 text-sm" />
       </div>
 
       {showAdd && (
@@ -1321,7 +1649,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           {/* Card list — small screens */}
           <div className="sm:hidden space-y-3">
             {filtered.map(c => (
-              <div key={c.id} className="crm-card p-4">
+              <div key={c.id} className={`crm-card p-4 ${removingId === c.id ? "crm-row-out" : "crm-row-in"}`}>
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="w-9 h-9 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
@@ -1332,7 +1660,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                       <p className="crm-mono text-xs text-muted truncate">{c.phone}</p>
                     </div>
                   </div>
-                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-2 crm-tap" aria-label={`Remove ${c.name}`}>
+                  <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger shrink-0 p-1" aria-label={`Remove ${c.name}`}>
                     <X size={16} />
                   </button>
                 </div>
@@ -1352,7 +1680,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           </div>
 
           {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar crm-scroll-fade">
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
             <table className="w-full text-sm min-w-[660px] border-collapse">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1367,7 +1695,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
               </thead>
               <tbody className="divide-y divide-default">
                 {filtered.map(c => (
-                  <tr key={c.id} className="hover:bg-surface-bright transition-colors">
+                  <tr key={c.id} className={`hover:bg-surface-bright transition-colors ${removingId === c.id ? "crm-row-out" : "crm-row-in"}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-full bg-primary-soft text-primary text-xs font-semibold flex items-center justify-center shrink-0">
@@ -1382,7 +1710,7 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
                     <td className="px-4 py-3"><ConsentBadge consent={c.consent} /></td>
                     <td className="px-4 py-3 text-muted text-xs">{c.lastActivity}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-2 crm-tap" aria-label={`Remove ${c.name}`}>
+                      <button onClick={() => setPendingDelete(c)} className="text-muted-2 hover:text-danger p-1" aria-label={`Remove ${c.name}`}>
                         <X size={15} />
                       </button>
                     </td>
@@ -1409,11 +1737,16 @@ function Contacts({ contacts, setContacts, notify, onMenuClick, menuOpen }) {
           onConfirm={() => {
             setDeleting(true);
             setTimeout(() => {
-              setContacts(prev => prev.filter(c => c.id !== pendingDelete.id));
-              notify(`${pendingDelete.name} removed`);
-              setCenterSuccess({ mode: "remove", message: `${pendingDelete.name} removed` });
+              const target = pendingDelete;
               setDeleting(false);
               setPendingDelete(null);
+              setRemovingId(target.id);
+              setTimeout(() => {
+                setContacts(prev => prev.filter(c => c.id !== target.id));
+                notify(`${target.name} removed`);
+                setCenterSuccess({ mode: "remove", message: `${target.name} removed` });
+                setRemovingId(null);
+              }, 220);
             }, 500);
           }}
         />
@@ -1443,26 +1776,25 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
   const steps = ["State", "Template", "Preview", "Launch"];
 
   return (
-    <div className="crm-card p-5 mb-6">
+    <div className="crm-card crm-panel-in p-5 mb-6">
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm font-semibold flex items-center gap-2"><Sparkles size={15} className="text-primary" /> New campaign</p>
         <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2 mb-5 sm:mb-6 text-xs">
+      <div className="flex items-center gap-2 mb-6 text-xs">
         {steps.map((s, i) => (
           <React.Fragment key={s}>
-            <div className={`flex items-center gap-1.5 shrink-0 ${step === i + 1 ? "text-ink font-medium" : step > i + 1 ? "text-muted" : "text-muted-2"}`}>
+            <div className={`flex items-center gap-1.5 ${step === i + 1 ? "text-ink font-medium" : step > i + 1 ? "text-muted" : "text-muted-2"}`}>
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${step > i + 1 ? "bg-accent text-white border-accent" : step === i + 1 ? "border-primary text-primary" : "border-default"}`}>
                 {step > i + 1 ? <Check size={11} /> : i + 1}
               </span>
-              <span className="crm-stepper-label">{s}</span>
+              {s}
             </div>
-            {i < steps.length - 1 && <div className="flex-1 h-px min-w-[8px]" style={{ background: "var(--border)" }} />}
+            {i < steps.length - 1 && <div className="flex-1 h-px" style={{ background: "var(--border)" }} />}
           </React.Fragment>
         ))}
       </div>
-      <p className="crm-stepper-current sm:hidden">Step {step} of {steps.length}: <span className="text-ink font-medium">{steps[step - 1]}</span></p>
 
       {step === 1 && (
         <div>
@@ -1517,14 +1849,14 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
         </div>
       )}
 
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 sm:gap-0 mt-4 sm:mt-6 pt-4 border-t border-default">
+      <div className="flex justify-between mt-6 pt-4 border-t border-default">
         <button onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}
-          className="flex items-center justify-center gap-1 text-sm text-muted disabled:opacity-30 px-3 py-2.5 crm-tap">
+          className="flex items-center gap-1 text-sm text-muted disabled:opacity-30 px-3 py-2">
           <ChevronLeft size={15} /> Back
         </button>
         {step < 4 ? (
           <button onClick={() => setStep(s => s + 1)} disabled={(step === 1 && (!name || eligible.length === 0)) || (step === 2 && !templateId)}
-            className="crm-btn-primary crm-tap flex items-center justify-center gap-1 px-4 py-2.5 text-sm disabled:opacity-40">
+            className="crm-btn-primary flex items-center gap-1 px-4 py-2 text-sm disabled:opacity-40">
             Continue <ChevronRight size={15} />
           </button>
         ) : (
@@ -1536,7 +1868,7 @@ function NewCampaignWizard({ contacts, templates, onClose, onLaunch }) {
                 onLaunch({ name: name || "Untitled campaign", segment, template: template.name, recipients: eligible.length });
               }, 600);
             }}
-            className="crm-btn-accent crm-tap flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:opacity-60"
+            className="crm-btn-accent flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
           >
             {launching
               ? <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white" style={{ animation: "spin 0.6s linear infinite" }} /> Launching…</>
@@ -1552,9 +1884,9 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
   const [showWizard, setShowWizard] = useState(false);
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Campaigns" subtitle="State-based sends, queued and rate-limited." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-        <button onClick={() => setShowWizard(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0">
+        <button onClick={() => setShowWizard(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
           <Plus size={15} /> New campaign
         </button>
       </div>
@@ -1582,17 +1914,18 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
           {campaigns.map(c => {
             const pct = c.recipients ? Math.round((c.sent / c.recipients) * 100) : 0;
             return (
-              <TiltCard key={c.id} maxTilt={2.5} className="crm-card p-4">
+              <div key={c.id} className="crm-row-in">
+              <TiltCard maxTilt={2.5} className="crm-card p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
                       <span className="crm-mono text-xs text-muted">{c.id}</span>
                       <CampaignStatusBadge status={c.status} />
                     </div>
-                    <p className="font-medium truncate">{c.name}</p>
-                    <p className="text-xs text-muted mt-0.5 truncate">{c.template} · {c.segment}</p>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-xs text-muted mt-0.5">{c.template} · {c.segment}</p>
                   </div>
-                  <div className="grid grid-cols-4 sm:flex sm:gap-4 gap-2 text-xs">
+                  <div className="flex gap-4 text-xs">
                     <div className="text-center"><p className="text-muted">Sent</p><p className="crm-mono">{c.sent}</p></div>
                     <div className="text-center"><p className="text-muted">Delivered</p><p className="crm-mono text-accent">{c.delivered}</p></div>
                     <div className="text-center"><p className="text-muted">Read</p><p className="crm-mono text-primary">{c.read}</p></div>
@@ -1605,6 +1938,7 @@ function Campaigns({ contacts, templates, campaigns, setCampaigns, notify, onMen
                   </div>
                 )}
               </TiltCard>
+              </div>
             );
           })}
         </div>
@@ -1621,7 +1955,7 @@ function RequestTemplatePanel({ onClose, onRequest }) {
   const [form, setForm] = useState({ name: "", category: "Marketing", body: "" });
   const [sending, setSending] = useState(false);
   return (
-    <div className="crm-card p-5 mb-4">
+    <div className="crm-card crm-panel-in p-5 mb-4">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold flex items-center gap-2"><FileText size={15} /> Request new template</p>
         <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
@@ -1661,9 +1995,9 @@ function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
   const [showRequest, setShowRequest] = useState(false);
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <PageHeader title="Templates" subtitle="Approval happens with the WhatsApp provider — this is the reference library." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary crm-tap flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0">
+        <button onClick={() => setShowRequest(s => !s)} className="crm-btn-primary flex items-center gap-2 px-4 py-2 text-sm font-medium shrink-0">
           <Plus size={15} /> Request template
         </button>
       </div>
@@ -1692,7 +2026,8 @@ function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
       ) : (
         <div className="crm-perspective grid md:grid-cols-2 gap-3">
           {templates.map(t => (
-            <TiltCard key={t.id} maxTilt={3} className="crm-card p-4">
+            <div key={t.id} className="crm-row-in">
+            <TiltCard maxTilt={3} className="crm-card p-4">
               <div className="flex items-start justify-between mb-2">
                 <div><p className="text-xs text-muted mb-1">{t.category}</p><p className="font-medium">{t.name}</p></div>
                 {t.status === "approved" ? <Badge tone="accent">Approved</Badge> : t.status === "rejected" ? <Badge tone="danger">Rejected</Badge> : <Badge tone="warning">Pending review</Badge>}
@@ -1702,6 +2037,7 @@ function Templates({ templates, setTemplates, notify, onMenuClick, menuOpen }) {
               </div>
               {t.status === "rejected" && <p className="text-xs text-danger mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Rejected by provider — edit and resubmit.</p>}
             </TiltCard>
+            </div>
           ))}
         </div>
       )}
@@ -1721,21 +2057,19 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
   return (
     <div>
       <PageHeader title="Reports" subtitle="Campaign performance and delivery outcomes." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-      <div className="crm-card p-4 sm:p-6 mb-4">
-        <p className="text-base sm:text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
-        <div className="overflow-x-auto crm-scrollbar crm-scroll-fade">
-          <ResponsiveContainer width="100%" minWidth={300} height={260}>
-            <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} width={32} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
-              <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-              <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-              <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="crm-card p-6 mb-4">
+        <p className="text-lg font-semibold mb-4">Delivered / read / failed by campaign</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={data}>
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: "var(--muted-2)" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)" }} />
+            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
       {campaigns.length === 0 ? (
         <div className="crm-card p-10 text-center">
@@ -1765,7 +2099,7 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
           </div>
 
           {/* Table — sm and up */}
-          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar crm-scroll-fade">
+          <div className="hidden sm:block crm-card overflow-x-auto crm-scrollbar">
             <table className="w-full text-sm min-w-[600px] border-collapse">
               <thead>
                 <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1816,7 +2150,7 @@ function InviteUserPanel({ existingEmails, onClose, onInvite }) {
   };
 
   return (
-    <div className="crm-card p-5 mb-4">
+    <div className="crm-card crm-panel-in p-5 mb-4">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold flex items-center gap-2"><UserPlus size={15} /> Invite user</p>
         <button onClick={onClose} className="text-muted hover:text-ink"><X size={16} /></button>
@@ -1862,33 +2196,33 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
   return (
     <div>
       <PageHeader title="Admin" subtitle="Users, WhatsApp account configuration, and access." onMenuClick={onMenuClick} menuOpen={menuOpen} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-        <div className="crm-card p-4 sm:p-5">
+      <div className="grid lg:grid-cols-2 gap-3 mb-4">
+        <div className="crm-card p-5">
           <p className="text-sm font-semibold mb-3 flex items-center gap-2"><ShieldCheck size={15} className="text-primary" /> WhatsApp account configuration</p>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between border-b border-default pb-2 gap-3">
-              <span className="text-muted shrink-0">Provider</span><span className="text-xs text-right">Not yet selected</span>
+            <div className="flex justify-between border-b border-default pb-2">
+              <span className="text-muted">Provider</span><span className="text-xs">Not yet selected</span>
             </div>
-            <div className="flex justify-between border-b border-default pb-2 gap-3">
-              <span className="text-muted shrink-0">Business verification</span><Badge tone="warning">Pending client confirmation</Badge>
+            <div className="flex justify-between border-b border-default pb-2">
+              <span className="text-muted">Business verification</span><Badge tone="warning">Pending client confirmation</Badge>
             </div>
-            <div className="flex justify-between items-center border-b border-default pb-2 gap-3">
-              <span className="text-muted shrink-0">API credentials</span>
-              <span className="crm-mono text-xs flex items-center gap-2 min-w-0">
-                <span className="truncate">{masked ? "••••••••••••3921" : "wh_live_9f2a...3921"}</span>
-                <button onClick={() => setMasked(m => !m)} className="text-muted-2 hover:text-ink p-1 crm-tap" aria-label={masked ? "Show credentials" : "Hide credentials"}><Eye size={13} /></button>
+            <div className="flex justify-between items-center border-b border-default pb-2">
+              <span className="text-muted">API credentials</span>
+              <span className="crm-mono text-xs flex items-center gap-2">
+                {masked ? "••••••••••••3921" : "wh_live_9f2a...3921"}
+                <button onClick={() => setMasked(m => !m)} className="text-muted-2 hover:text-ink"><Eye size={13} /></button>
               </span>
             </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-muted shrink-0">Webhook endpoint</span><span className="crm-mono text-xs truncate text-right">/webhooks/whatsapp</span>
+            <div className="flex justify-between">
+              <span className="text-muted">Webhook endpoint</span><span className="crm-mono text-xs">/webhooks/whatsapp</span>
             </div>
           </div>
         </div>
-        <div className="crm-card p-4 sm:p-5">
+        <div className="crm-card p-5">
           <p className="text-sm font-semibold mb-3 flex items-center gap-2"><Sparkles size={15} className="text-accent" /> Messaging policy checks</p>
           <ul className="space-y-2.5 text-sm">
             {["Consent required before bulk send", "Opt-outs auto-excluded from campaigns", "Only approved templates for first-contact sends", "Rate limiting enforced at worker layer"].map(t => (
-              <li key={t} className="flex items-start gap-2"><Check size={14} className="text-accent shrink-0 mt-0.5" /> <span>{t}</span></li>
+              <li key={t} className="flex items-center gap-2"><Check size={14} className="text-accent shrink-0" /> {t}</li>
             ))}
           </ul>
         </div>
@@ -1906,9 +2240,9 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
       )}
 
       <div className="crm-card overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright gap-2">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-default bg-surface-bright">
           <p className="text-sm font-semibold">Users</p>
-          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium crm-tap">
+          <button onClick={() => setShowInvite(s => !s)} className="flex items-center gap-1.5 text-xs text-primary font-medium">
             <Plus size={13} /> Invite user
           </button>
         </div>
@@ -1916,7 +2250,7 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
         {/* Card list — small screens */}
         <div className="sm:hidden divide-y divide-default">
           {users.map(u => (
-            <div key={u.id} className="p-4">
+            <div key={u.id} className="crm-row-in p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="font-medium">{u.name}</p>
                 {u.status === "active" ? <Badge tone="accent">Active</Badge> : <Badge tone="warning">Invited</Badge>}
@@ -1928,7 +2262,7 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
         </div>
 
         {/* Table — sm and up */}
-        <div className="hidden sm:block overflow-x-auto crm-scrollbar crm-scroll-fade">
+        <div className="hidden sm:block overflow-x-auto crm-scrollbar">
           <table className="w-full text-sm min-w-[540px] border-collapse">
             <thead>
               <tr className="text-left text-xs text-muted border-b border-default bg-surface-bright uppercase tracking-wide">
@@ -1938,7 +2272,7 @@ function Admin({ users, setUsers, notify, onMenuClick, menuOpen }) {
             </thead>
             <tbody className="divide-y divide-default">
               {users.map(u => (
-                <tr key={u.id} className="hover:bg-surface-bright transition-colors">
+                <tr key={u.id} className="crm-row-in hover:bg-surface-bright transition-colors">
                   <td className="px-4 py-3">{u.name}</td>
                   <td className="px-4 py-3 text-muted">{u.role}</td>
                   <td className="px-4 py-3 crm-mono text-xs">{u.email}</td>
@@ -1967,13 +2301,32 @@ export default function App() {
   const [templates, setTemplates] = useState(initialTemplates);
   const [users, setUsers] = useState(initialUsers);
   const [dark, setDark] = useState(false);
+  const rootRef = useRef(null);
+  const handleToggleDark = () => {
+    toggleDarkMode(() => {
+      setDark(d => !d);
+      if (rootRef.current) rootRef.current.classList.toggle("dark");
+    });
+  };
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const notify = (msg) => setToast(msg);
+
+  const LOGOUT_ANIM_MS = 1000;
+  const handleLogout = () => {
+    setConfirmLogout(false);
+    setLoggingOut(true);
+    setTimeout(() => {
+      setUser(null);
+      setLoggingOut(false);
+    }, LOGOUT_ANIM_MS);
+  };
 
   if (!user) {
     return (
       <div className={`crm-root${dark ? " dark" : ""}`}>
         <Tokens />
-        <LoginPage onLogin={setUser} />
+        <LoginPage onLogin={(u) => { setUser(u); setMobileOpen(false); setActive("dashboard"); }} />
       </div>
     );
   }
@@ -1989,15 +2342,26 @@ export default function App() {
   };
 
   return (
-    <div className={`crm-root min-h-screen flex${dark ? " dark" : ""}`}>
+    <div ref={rootRef} className={`crm-root min-h-screen flex${dark ? " dark" : ""}`}>
       <Tokens />
-      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setUser(null)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} setDark={setDark} />
+      <Sidebar active={active} setActive={setActive} user={user} onLogout={() => setConfirmLogout(true)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} dark={dark} onToggleDark={handleToggleDark} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <main className="flex-1 min-w-0 p-3 sm:p-5 md:p-6 lg:p-8">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-7 lg:p-8">
           {pages[active]}
         </main>
       </div>
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {confirmLogout && (
+        <ConfirmDialog
+          title="Log out of your workspace?"
+          description="You'll need to sign in again to access contacts, campaigns, and reports."
+          confirmLabel="Log out"
+          danger
+          onConfirm={handleLogout}
+          onCancel={() => setConfirmLogout(false)}
+        />
+      )}
+      {loggingOut && <LogoutOverlay name={user?.name?.split(" ")[0]} duration={LOGOUT_ANIM_MS} />}
     </div>
   );
 }
