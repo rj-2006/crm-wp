@@ -28,45 +28,49 @@ const Tokens = () => (
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 
     .crm-root {
-      --bg: #FCFCFD;             /* surface-container-low / canvas */
-      --surface: #FFFFFF;        /* surface-container-lowest */
-      --surface-bright: #FAFBFC; /* table header / sidebar tint */
-      --ink: #374151;            /* on-surface — softened from near-black */
-      --muted: #6B7280;          /* on-surface-variant */
-      --muted-2: #B0B7C3;        /* placeholder */
-      --border: #EEF0F3;         /* outline-variant */
-      --primary: #5B8DEF;        /* CRM actions — lighter, airier blue */
-      --primary-soft: #F3F7FF;
-      --accent: #4ADE9A;         /* WhatsApp states only — lighter mint green */
-      --accent-soft: #F1FDF7;
-      --danger: #F0837D;         /* softened coral instead of hard red */
-      --danger-soft: #FEF5F4;
-      --warning: #F6BB5C;        /* softened amber */
-      --warning-soft: #FFFAF0;
-      font-family: 'Inter', sans-serif;
+      --bg: #F2F1ED;             /* Neutral Sand */
+      --surface: #FFFFFF;        /* White cards */
+      --surface-bright: #F9F8F5; /* Table headers / subtle offset */
+      --ink: #111827;            /* Graphite Primary Text */
+      --muted: #9CA3AF;          /* Medium Gray */
+      --muted-2: #D1D5DB;        /* Placeholder / borders */
+      --border: #E5E7EB;         /* Standard border */
+      --primary: #C08532;        /* Copper Sand Primary */
+      --primary-soft: #FDF8F3;   /* Soft Copper background */
+      --accent: #16A34A;         /* Success Green */
+      --accent-soft: #DCFCE7;
+      --danger: #DC2626;         /* Red Alert */
+      --danger-soft: #FEE2E2;
+      --warning: #F59E0B;        /* Amber */
+      --warning-soft: #FEF3C7;
+      font-family: 'Geist', sans-serif;
       color: var(--ink);
       background: var(--bg);
       -webkit-font-smoothing: antialiased;
       transition: background-color .2s ease, color .2s ease;
     }
     .crm-root.dark {
-      --bg: #14161C;
-      --surface: #1B1E26;
-      --surface-bright: #20232C;
-      --ink: #E7E9EE;
-      --muted: #9BA3B0;
-      --muted-2: #5B6270;
-      --border: #2C303A;
-      --primary: #7DA6FF;
-      --primary-soft: #223354;
-      --accent: #5FE3AA;
-      --accent-soft: #1B3A2E;
-      --danger: #F49690;
-      --danger-soft: #3A2426;
-      --warning: #F7C777;
-      --warning-soft: #3A311F;
+      --bg: #111827;
+      --surface: #1F2937;
+      --surface-bright: #374151;
+      --ink: #F3F4F6;
+      --muted: #9CA3AF;
+      --muted-2: #6B7280;
+      --border: #374151;
+      --primary: #C08532;
+      --primary-soft: #452A0A;
+      --accent: #22C55E;
+      --accent-soft: #14532D;
+      --danger: #EF4444;
+      --danger-soft: #7F1D1D;
+      --warning: #F59E0B;
+      --warning-soft: #78350F;
     }
-    .crm-mono { font-family: 'Inter', monospace; font-variant-numeric: tabular-nums; }
+    .crm-mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+    
+    .crm-root h1, .crm-root h2, .crm-root h3, .crm-root h4 {
+      letter-spacing: -0.15px;
+    }
 
     /* Broad theme-switch transition: every surface fades between light/dark
        together, not just the root. Placed before the more specific rules
@@ -97,48 +101,50 @@ const Tokens = () => (
     .crm-card {
       background: var(--surface);
       border: 1px solid var(--border);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
       border-radius: 8px;
     }
     .crm-input {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      transition: background-color 260ms ease, border-color 150ms ease, color 260ms ease, box-shadow .15s ease;
+      transition: background-color 260ms ease, border-color 150ms ease, box-shadow .15s ease;
     }
     .crm-input:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(91,141,239,0.12);
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
       outline: none;
     }
     .crm-btn-primary {
       background: var(--primary);
       color: #fff;
+      font-weight: 600;
       border-radius: 8px;
-      transition: background-color 260ms ease, opacity .15s ease, transform .12s ease, box-shadow .12s ease;
-      box-shadow: 0 1px 2px rgba(91,141,239,0.15);
+      transition: background-color 260ms ease, transform .12s ease, box-shadow .12s ease;
     }
-    .crm-btn-primary:hover { opacity: 0.92; box-shadow: 0 4px 10px -3px rgba(91,141,239,0.35); }
-    .crm-btn-primary:active { transform: scale(0.98); }
+    .crm-btn-primary:hover { background: #A97128; box-shadow: 0 4px 10px -3px rgba(192,133,50,0.35); }
+    .crm-btn-primary:active { transform: translateY(1px); }
     .crm-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
     .crm-btn-secondary {
-      background: var(--surface);
-      color: var(--ink);
-      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--muted-2);
       border-radius: 8px;
+      font-weight: 600;
       transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease;
     }
-    .crm-btn-secondary:hover { background: var(--surface-bright); }
+    .crm-btn-secondary:hover { background: var(--primary-soft); border-color: var(--primary); }
 
     .crm-btn-accent {
       background: var(--accent);
       color: #fff;
+      font-weight: 600;
       border-radius: 8px;
       transition: background-color 260ms ease, opacity .15s ease, box-shadow .12s ease;
-      box-shadow: 0 1px 2px rgba(74,222,154,0.15);
     }
-    .crm-btn-accent:hover { opacity: 0.9; box-shadow: 0 4px 10px -3px rgba(74,222,154,0.4); }
-    .crm-btn-accent:active { transform: scale(0.98); }
+    .crm-btn-accent:hover { opacity: 0.9; box-shadow: 0 4px 10px -3px rgba(22,163,74,0.4); }
+    .crm-btn-accent:active { transform: translateY(1px); }
     .crm-btn-accent:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
     .crm-nav-item {
@@ -312,7 +318,7 @@ const deliveryTrend = [
   { day: "Sun", delivered: 150, read: 90 },
 ];
 
-const consentColors = { opted_in: "#4ADE9A", opted_out: "#F0837D", pending: "#F6BB5C" };
+const consentColors = { opted_in: "#16A34A", opted_out: "#DC2626", pending: "#F59E0B" };
 const consentSplit = [
   { name: "Opted in", key: "opted_in", value: initialContacts.filter(c => c.consent === "opted_in").length },
   { name: "Pending", key: "pending", value: initialContacts.filter(c => c.consent === "pending").length },
@@ -341,7 +347,7 @@ function Badge({ tone = "muted", children }) {
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[12px] font-medium ${tones[tone]}`}>
       {(tone === "accent" || tone === "warning" || tone === "danger" || tone === "info") && (
         <span className="w-1.5 h-1.5 rounded-full" style={{
-          background: tone === "accent" ? "#4ADE9A" : tone === "warning" ? "#F6BB5C" : tone === "danger" ? "#F0837D" : "#5B8DEF"
+          background: tone === "accent" ? "#16A34A" : tone === "warning" ? "#F59E0B" : tone === "danger" ? "#DC2626" : "#C08532"
         }} />
       )}
       {children}
@@ -468,7 +474,7 @@ function RoleCredentialFields({ role, onLogin, onForgot }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const accentColor = role === "Administrator" ? "#5B8DEF" : "#4ADE9A";
+  const accentColor = role === "Administrator" ? "#C08532" : "#16A34A";
   const btnClass = role === "Administrator" ? "crm-btn-primary" : "crm-btn-accent";
 
   return (
@@ -862,8 +868,8 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
               <XAxis dataKey="day" tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
-              <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="delivered" stroke="#C08532" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="read" stroke="#16A34A" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-2">
@@ -1574,9 +1580,9 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
             <XAxis dataKey="name" tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
             <YAxis tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
-            <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="failed" fill="#F0837D" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="delivered" fill="#C08532" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="read" fill="#16A34A" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="failed" fill="#DC2626" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
