@@ -859,8 +859,8 @@ function Dashboard({ contacts, campaigns, onMenuClick, menuOpen, dark }) {
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={deliveryTrend}>
               <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
               <Line type="monotone" dataKey="delivered" stroke="#5B8DEF" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="read" stroke="#4ADE9A" strokeWidth={2} dot={false} />
@@ -1571,8 +1571,8 @@ function Reports({ campaigns, onMenuClick, menuOpen, dark }) {
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data}>
             <CartesianGrid stroke={dark ? "#2C303A" : "#EEF0F3"} vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: dark ? "#5B6270" : "#B0B7C3" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={{ stroke: dark ? "#2C303A" : "#EEF0F3" }} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: dark ? "#9BA3B0" : "#6B7280" }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${dark ? "#2C303A" : "#EEF0F3"}`, background: dark ? "#1B1E26" : "#FFFFFF", color: dark ? "#E7E9EE" : "#374151" }} />
             <Bar dataKey="delivered" fill="#5B8DEF" radius={[3, 3, 0, 0]} />
             <Bar dataKey="read" fill="#4ADE9A" radius={[3, 3, 0, 0]} />
